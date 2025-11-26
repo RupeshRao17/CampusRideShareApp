@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Campus RideShare",
+    "slug": "campus-rideshare",
+    "scheme": "campusrideshare",
+    "version": "0.1.0",
+    
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "in.sies.campusrideshare"
+    },
+    "web": {
+      "bundler": "metro",
+      "name": "Campus RideShare"
+    },
+    "extra": {
+      "firebase": {
+        "apiKey": "",
+        "authDomain": "",
+        "projectId": "",
+        "storageBucket": "",
+        "messagingSenderId": "",
+        "appId": "",
+        "databaseURL": ""
+      }
+    }
+  }
+}
