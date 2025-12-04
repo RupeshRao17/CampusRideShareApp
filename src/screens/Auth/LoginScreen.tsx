@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: '800',
-    color: '#2E7D32',
+    color: '#1f6422ff',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(76, 175, 80, 0.2)',
   },
   tagText: {
-    color: '#2E7D32',
+    color: '#1f6422ff',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -206,13 +206,13 @@ const styles = StyleSheet.create({
   loginTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A237E',
+    color: '#1f6422ff',
     textAlign: 'center',
     marginBottom: 8,
   },
   loginSubtitle: {
     fontSize: 14,
-    color: '#4FC3F7',
+    color: '#4CAF50',
     textAlign: 'center',
     marginBottom: 32,
     fontWeight: '500',
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A237E',
+    color: '#1f6422ff',
     marginLeft: 4,
   },
   textInput: {
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   loginButton: {
-    backgroundColor: '#4FC3F7',
+    backgroundColor: '#1f6422ff',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   signupLink: {
-    color: '#4FC3F7',
+    color: '#1f6422ff',
     fontSize: 15,
     fontWeight: '700',
   },

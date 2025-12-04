@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#2E7D32',
+    color: '#1f6422ff',
     marginBottom: 8,
     letterSpacing: -0.5,
     textAlign: 'center',
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(76, 175, 80, 0.2)',
   },
   tagText: {
-    color: '#2E7D32',
+    color: '#1f6422ff',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -312,13 +312,13 @@ const styles = StyleSheet.create({
   signupTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A237E',
+    color: '#1f6422ff',
     textAlign: 'center',
     marginBottom: 8,
   },
   signupSubtitle: {
     fontSize: 14,
-    color: '#4FC3F7',
+    color: '#4CAF50',
     textAlign: 'center',
     marginBottom: 32,
     fontWeight: '500',
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A237E',
+    color: '#1f6422ff',
     marginLeft: 4,
   },
   textInput: {
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   emailHint: {
     fontSize: 12,
-    color: '#4FC3F7',
+    color: '#4CAF50',
     marginLeft: 4,
     fontStyle: 'italic',
   },
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   genderOptionSelected: {
-    backgroundColor: '#4FC3F7',
+    backgroundColor: '#1f6422ff',
   },
   genderText: {
     fontSize: 14,
@@ -395,11 +395,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   signupButton: {
-    backgroundColor: '#4FC3F7',
+    backgroundColor: '#1f6422ff',
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#4FC3F7',
+    shadowColor: '#1f6422ff',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   loginLink: {
-    color: '#4FC3F7',
+    color: '#1f6422ff',
     fontSize: 15,
     fontWeight: '700',
   },
