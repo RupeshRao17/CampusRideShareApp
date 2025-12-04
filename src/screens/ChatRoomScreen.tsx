@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { listenChat, sendMessage } from '@services/chat';
 import { useAuthState } from '@lib/firebase';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 
 export default function ChatRoomScreen() {
   const route = useRoute<any>();
+  const navigation = useNavigation();
   const chatId = route.params?.chatId || 'demo';
   const userName = route.params?.userName || 'User';
   const { user, profile } = useAuthState();
@@ -102,37 +103,47 @@ export default function ChatRoomScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      {/* Header with Blue Gradient */}
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity 
+          style={styles.leftButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.icon}>←</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.title}>Chat</Text>
+        
+        <TouchableOpacity style={styles.profileButton}>
+          <View style={styles.profileAvatar}>
+            <Text style={styles.profileInitial}>
+              {profile?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Header with User Info */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.headerTop}>
-            <View style={styles.userInfo}>
-              <View style={styles.avatarContainer}>
-                <View style={[styles.avatar, styles.avatarGradient]}>
-                  <Text style={styles.avatarText}>
-                    {userName?.charAt(0)?.toUpperCase() || 'U'}
-                  </Text>
-                </View>
-                <View style={styles.statusIndicator} />
+          <View style={styles.userInfo}>
+            <View style={styles.avatarContainer}>
+              <View style={[styles.avatar, styles.avatarGradient]}>
+                <Text style={styles.avatarText}>
+                  {userName?.charAt(0)?.toUpperCase() || 'U'}
+                </Text>
               </View>
-              <View style={styles.userDetails}>
-                <Text style={styles.userName}>{userName}</Text>
-                <View style={styles.statusRow}>
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusText}>Online</Text>
-                  </View>
-                  <Text style={styles.lastSeen}>Active now</Text>
+              <View style={styles.statusIndicator} />
+            </View>
+            <View style={styles.userDetails}>
+              <Text style={styles.userName}>{userName}</Text>
+              <View style={styles.statusRow}>
+                <View style={styles.statusPill}>
+                  <Text style={styles.statusText}>Online</Text>
                 </View>
+                <Text style={styles.lastSeen}>Active now</Text>
               </View>
             </View>
-            
-            <TouchableOpacity style={styles.moreButton}>
-              <View style={styles.moreDots}>
-                <View style={styles.moreDot} />
-                <View style={styles.moreDot} />
-                <View style={styles.moreDot} />
-              </View>
-            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -218,10 +229,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   
+  // Top Bar
+  topBar: {
+    paddingTop:35,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  leftButton: {
+    padding: 8,
+  },
+  icon: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  profileButton: {
+    padding: 4,
+  },
+  profileAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitial: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  
   // Header
   header: {
     backgroundColor: '#2563EB',
-    paddingTop: 16,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     shadowColor: '#2563EB',
@@ -232,17 +289,11 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingVertical: 20,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   avatarContainer: {
     position: 'relative',
@@ -306,21 +357,8 @@ const styles = StyleSheet.create({
     color: '#DBEAFE',
     fontWeight: '500',
   },
-  moreButton: {
-    padding: 8,
-  },
-  moreDots: {
-    gap: 3,
-  },
-  moreDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.8,
-  },
   
-  // Messages
+  // Rest of the styles remain the same...
   messagesContainer: {
     flex: 1,
   },
