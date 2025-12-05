@@ -84,10 +84,10 @@ export default function ChatsScreen() {
   const displayChats = chats.length > 0 ? chats : placeholderChats;
 
   const handleChatPress = (chat: any) => {
-    navigation.navigate('ChatRoom', { 
+    navigation.navigate('ChatRoom' as never, {
       chatId: chat.id,
-      userName: chat.userName 
-    });
+      userName: chat.userName,
+    } as never);
   };
 
   return (

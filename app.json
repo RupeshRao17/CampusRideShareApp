@@ -23,14 +23,9 @@
       "name": "Campus RideShare"
     },
     "extra": {
-      "firebase": {
-        "apiKey": "",
-        "authDomain": "",
-        "projectId": "",
-        "storageBucket": "",
-        "messagingSenderId": "",
-        "appId": "",
-        "databaseURL": ""
+      "supabase": {
+        "url": "https://oluccrwhokjfpckujcvu.supabase.co",
+        "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sdWNjcndob2tqZnBja3VqY3Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MzcxMjYsImV4cCI6MjA4MDUxMzEyNn0.GgPtsl_m62WHneVtXBax3cdLFYCZZkUjMmWfu-IE5kI"
       }
     }
   }

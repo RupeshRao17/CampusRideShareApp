@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   messageContent: {
-    alignItems: 'inherit',
+    alignItems: 'flex-start',
   },
   messageBubble: {
     borderRadius: 20,
