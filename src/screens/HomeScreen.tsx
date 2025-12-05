@@ -1,91 +1,52 @@
-import { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
+import { useAuthState, supabase } from '@lib/firebase';
+import { getActiveRides, getActiveTrainPosts, requestRide } from '@services/data';
+import { useNavigation } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Mock Auth State
-const mockProfile = {
-  name: 'Rupesh',
-  gender: 'Any'
-};
 
 type TabType = 'rides' | 'trains';
 
 export default function ModernHomeScreen() {
+  const navigation = useNavigation();
+  const { user, profile } = useAuthState();
   const [activeTab, setActiveTab] = useState<TabType>('rides');
   const [searchFocused, setSearchFocused] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const [rides, setRides] = useState<any[]>([]);
+  const [trains, setTrains] = useState<any[]>([]);
+  const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
 
-  const placeholderRides = [
-    {
-      id: '1',
-      driverName: 'Alex Sharma',
-      driverInitial: 'A',
-      from: 'SIES College',
-      to: 'Vashi Station',
-      departureTime: '08:00 AM',
-      arrivalTime: '08:30 AM',
-      seats: 3,
-      price: 50,
-      rating: 4.8,
-      trips: 127,
-      verified: true,
-      instantBook: true,
-      carModel: 'Hyundai i20',
-      carColor: 'White'
-    },
-    {
-      id: '2',
-      driverName: 'Priya Patel',
-      driverInitial: 'P',
-      from: 'Nerul Station',
-      to: 'Seawoods',
-      departureTime: '05:15 PM',
-      arrivalTime: '05:40 PM',
-      seats: 2,
-      price: 40,
-      rating: 4.9,
-      trips: 203,
-      verified: true,
-      instantBook: false,
-      carModel: 'Maruti Swift',
-      carColor: 'Red'
-    }
-  ];
+  useEffect(() => {
+    if (!profile?.gender) return;
+    const unsub = getActiveRides(profile.gender, setRides);
+    return () => unsub();
+  }, [profile?.gender]);
 
-  const placeholderTrains = [
-    {
-      id: '1',
-      passengerName: 'Rahul Verma',
-      passengerInitial: 'R',
-      trainName: 'Harbour Line',
-      from: 'CST',
-      to: 'Panvel',
-      station: 'Nerul',
-      departureTime: '08:45 AM',
-      arrivalTime: '09:30 AM',
-      passengers: 2,
-      rating: 4.7,
-      verified: true,
-      coach: 'First Class'
-    },
-    {
-      id: '2',
-      passengerName: 'Sneha Joshi',
-      passengerInitial: 'S',
-      trainName: 'Trans-Harbour',
-      from: 'Thane',
-      to: 'Nerul',
-      station: 'Seawoods',
-      departureTime: '06:30 PM',
-      arrivalTime: '07:15 PM',
-      passengers: 1,
-      rating: 4.9,
-      verified: true,
-      coach: 'General'
+  useEffect(() => {
+    const unsub = getActiveTrainPosts(setTrains);
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const ids = Array.from(new Set(rides.map((r) => r.driverId).filter(Boolean)));
+    if (ids.length === 0) {
+      setDriverProfiles({});
+      return;
     }
-  ];
+    supabase
+      .from('profiles')
+      .select('id,department,year,rating')
+      .in('id', ids)
+      .then(({ data }) => {
+        const map: Record<string, any> = {};
+        for (const p of data || []) map[p.id] = p;
+        setDriverProfiles(map);
+      });
+  }, [rides]);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -118,6 +79,24 @@ export default function ModernHomeScreen() {
     });
   };
 
+  const handleRequestRide = async (ride: any) => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to request a ride');
+      return;
+    }
+    try {
+      await requestRide({ id: ride.id, driverId: ride.driverId }, { id: user.uid, name: profile?.name || 'User' });
+      Alert.alert('Request Sent', 'The driver has been notified');
+    } catch (e) {
+      Alert.alert('Error', 'Could not send request');
+    }
+  };
+
+  const handleChatWithDriver = (ride: any) => {
+    const chatId = `ride_${ride.id}_${user?.uid || 'guest'}_${ride.driverId}`;
+    (navigation as any).navigate('ChatRoom', { chatId, userName: ride.driverName, receiverId: ride.driverId });
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -125,12 +104,12 @@ export default function ModernHomeScreen() {
         <View style={styles.headerContent}>
           <View style={styles.headerTop}>
             <View style={styles.greetingContainer}>
-              <Text style={styles.greeting}>Hello, {mockProfile.name} 👋</Text>
+              <Text style={styles.greeting}>Hello, {profile?.name || 'User'} 👋</Text>
               <Text style={styles.subtitle}>Ready for your next journey?</Text>
             </View>
             <TouchableOpacity style={styles.profileButton}>
               <View style={styles.profileAvatar}>
-                <Text style={styles.profileInitial}>{mockProfile.name[0].toUpperCase()}</Text>
+                <Text style={styles.profileInitial}>{(profile?.name || 'U')[0].toUpperCase()}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -195,14 +174,13 @@ export default function ModernHomeScreen() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Available Rides</Text>
-                <Text style={styles.sectionSubtitle}>{placeholderRides.length} rides nearby • Updated just now</Text>
+                <Text style={styles.sectionSubtitle}>{rides.length} rides nearby</Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
-
-            {placeholderRides.map((ride, index) => (
+            {rides.map((ride, index) => (
               <TouchableOpacity 
                 key={ride.id} 
                 style={[styles.modernCard, styles.cardElevated]}
@@ -214,30 +192,26 @@ export default function ModernHomeScreen() {
                   <View style={styles.driverRow}>
                     <View style={styles.avatarContainer}>
                       <View style={[styles.avatar, styles.avatarGradient]}>
-                        <Text style={styles.avatarText}>{ride.driverInitial}</Text>
+                        <Text style={styles.avatarText}>{(ride.driverName || 'U')[0].toUpperCase()}</Text>
                       </View>
-                      {ride.verified && (
-                        <View style={styles.verifiedBadge}>
-                          <Text style={styles.verifiedIcon}>✓</Text>
-                        </View>
-                      )}
                     </View>
                     <View style={styles.driverDetails}>
                       <Text style={styles.driverName}>{ride.driverName}</Text>
                       <View style={styles.metaRow}>
                         <View style={styles.ratingPill}>
                           <Text style={styles.ratingStar}>★</Text>
-                          <Text style={styles.ratingText}>{ride.rating}</Text>
+                          <Text style={styles.ratingText}>{driverProfiles[ride.driverId]?.rating || '5.0'}</Text>
                         </View>
                         <View style={styles.carInfo}>
-                          <Text style={styles.carText}>{ride.carModel}</Text>
+                          <Text style={styles.carText}>{driverProfiles[ride.driverId]?.department || ''}</Text>
                         </View>
+                        <Text style={styles.tripCount}>{driverProfiles[ride.driverId]?.year || ''}</Text>
                       </View>
                     </View>
                   </View>
                   
                   <View style={styles.priceSection}>
-                    <Text style={styles.priceAmount}>₹{ride.price}</Text>
+                    <Text style={styles.priceAmount}>₹{ride.cost}</Text>
                     <Text style={styles.priceLabel}>per seat</Text>
                   </View>
                 </View>
@@ -257,20 +231,18 @@ export default function ModernHomeScreen() {
                   </View>
                   
                   <View style={styles.routeInfo}>
-                    {/* Departure */}
                     <View style={styles.locationRow}>
                       <View style={styles.locationContent}>
                         <Text style={styles.locationText}>{ride.from}</Text>
                       </View>
-                      <Text style={styles.timeText}>{ride.departureTime}</Text>
+                      <Text style={styles.timeText}>{(ride.time || '').split(' - ')[0]}</Text>
                     </View>
                     
-                    {/* Destination */}
                     <View style={styles.locationRow}>
                       <View style={styles.locationContent}>
                         <Text style={styles.locationText}>{ride.to}</Text>
                       </View>
-                      <Text style={styles.timeText}>{ride.arrivalTime}</Text>
+                      <Text style={styles.timeText}>{(ride.time || '').split(' - ')[1]}</Text>
                     </View>
                   </View>
                 </View>
@@ -285,23 +257,31 @@ export default function ModernHomeScreen() {
                             key={i} 
                             style={[
                               styles.seatDot, 
-                              i < ride.seats ? styles.seatAvailable : styles.seatUnavailable
+                              i < (ride.availableSeats || 0) ? styles.seatAvailable : styles.seatUnavailable
                             ]} 
                           />
                         ))}
                       </View>
-                      <Text style={styles.seatsText}>{ride.seats} seats left</Text>
+                      <Text style={styles.seatsText}>{ride.availableSeats} seats left</Text>
                     </View>
                   </View>
                   
-                  <TouchableOpacity 
-                    style={[styles.primaryButton, styles.buttonElevated]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      {ride.instantBook ? 'Book Now' : 'Request'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity 
+                      style={[styles.secondaryButton]}
+                      activeOpacity={0.8}
+                      onPress={() => handleChatWithDriver(ride)}
+                    >
+                      <Text style={styles.secondaryButtonText}>Chat</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.primaryButton, styles.buttonElevated]}
+                      activeOpacity={0.8}
+                      onPress={() => handleRequestRide(ride)}
+                    >
+                      <Text style={styles.primaryButtonText}>Request</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
@@ -311,14 +291,14 @@ export default function ModernHomeScreen() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Train Connections</Text>
-                <Text style={styles.sectionSubtitle}>{placeholderTrains.length} buddies available • Same route</Text>
+                <Text style={styles.sectionSubtitle}>{trains.length} buddies available • Same route</Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
 
-            {placeholderTrains.map((train) => (
+            {trains.map((train) => (
               <TouchableOpacity 
                 key={train.id} 
                 style={[styles.modernCard, styles.cardElevated]}
@@ -329,22 +309,13 @@ export default function ModernHomeScreen() {
                   <View style={styles.driverRow}>
                     <View style={styles.avatarContainer}>
                       <View style={[styles.avatar, styles.avatarGradientSecondary]}>
-                        <Text style={styles.avatarText}>{train.passengerInitial}</Text>
+                        <Text style={styles.avatarText}>{(train.userName || 'U')[0].toUpperCase()}</Text>
                       </View>
-                      {train.verified && (
-                        <View style={styles.verifiedBadge}>
-                          <Text style={styles.verifiedIcon}>✓</Text>
-                        </View>
-                      )}
                     </View>
                     <View style={styles.driverDetails}>
-                      <Text style={styles.driverName}>{train.passengerName}</Text>
+                      <Text style={styles.driverName}>{train.userName}</Text>
                       <View style={styles.metaRow}>
-                        <View style={styles.ratingPill}>
-                          <Text style={styles.ratingStar}>★</Text>
-                          <Text style={styles.ratingText}>{train.rating}</Text>
-                        </View>
-                        <Text style={styles.tripCount}>{train.passengers} {train.passengers === 1 ? 'traveler' : 'travelers'}</Text>
+                        <Text style={styles.tripCount}>{train.passengersCount} {train.passengersCount === 1 ? 'traveler' : 'travelers'}</Text>
                       </View>
                     </View>
                   </View>
@@ -359,9 +330,9 @@ export default function ModernHomeScreen() {
                     <View style={styles.trainDetails}>
                       <Text style={styles.trainName}>{train.trainName}</Text>
                       <View style={styles.trainMeta}>
-                        <Text style={styles.trainRoute}>{train.from} → {train.to}</Text>
+                        <Text style={styles.trainRoute}>{train.fromStation} → {train.toStation}</Text>
                         <View style={styles.coachBadge}>
-                          <Text style={styles.coachText}>{train.coach}</Text>
+                          <Text style={styles.coachText}>General</Text>
                         </View>
                       </View>
                     </View>
@@ -383,15 +354,13 @@ export default function ModernHomeScreen() {
                   </View>
                   
                   <View style={styles.routeInfo}>
-                    {/* Departure */}
                     <View style={styles.locationRow}>
                       <View style={styles.locationContent}>
-                        <Text style={styles.locationText}>{train.station} Station</Text>
+                        <Text style={styles.locationText}>{train.arrivalStation} Station</Text>
                       </View>
-                      <Text style={styles.timeText}>{train.departureTime}</Text>
+                      <Text style={styles.timeText}>{train.arrivalTime}</Text>
                     </View>
                     
-                    {/* Destination */}
                     <View style={styles.locationRow}>
                       <View style={styles.locationContent}>
                         <Text style={styles.locationText}>Traveling together</Text>
@@ -874,6 +843,20 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginRight: 12,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    color: '#1E40AF',
     fontWeight: '700',
   },
   

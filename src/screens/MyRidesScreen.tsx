@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
+import { getRideRequestsForDriver, acceptRideRequest } from '@services/data';
+import { useNavigation } from '@react-navigation/native';
 import { getMyRides } from '@services/data';
 import { useAuthState } from '@lib/firebase';
 
@@ -8,8 +10,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type TabType = 'upcoming' | 'past' | 'posted';
 
 export default function MyRidesScreen() {
+  const navigation = useNavigation();
   const { user, profile } = useAuthState();
   const [rides, setRides] = useState<any[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -17,6 +21,12 @@ export default function MyRidesScreen() {
   useEffect(() => {
     if (!user) return;
     const unsub = getMyRides(user.uid, setRides);
+    return () => unsub();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = getRideRequestsForDriver(user.uid, setRequests);
     return () => unsub();
   }, [user?.uid]);
 
@@ -67,8 +77,8 @@ export default function MyRidesScreen() {
   };
 
   // Filter rides based on active tab
-  const bookedRides = rides.filter(ride => !ride.isDriver);
-  const postedRides = rides.filter(ride => ride.isDriver);
+  const bookedRides: any[] = [];
+  const postedRides = rides;
 
   const filteredBookedRides = bookedRides.filter(ride => {
     if (activeTab === 'upcoming') {
@@ -79,108 +89,8 @@ export default function MyRidesScreen() {
     return false;
   });
 
-  // Enhanced placeholder data matching home screen design
-  const placeholderUpcoming = [
-    {
-      id: '1',
-      driverName: 'Alex Sharma',
-      driverInitial: 'A',
-      from: 'SIES College',
-      to: 'Vashi Station',
-      date: 'Today',
-      time: '17:30 - 18:00',
-      seats: 3,
-      cost: 50,
-      status: 'confirmed',
-      isPlaceholder: true,
-      rating: 4.8,
-      trips: 127,
-      verified: true,
-      carModel: 'Hyundai i20',
-      isDriver: false
-    },
-    {
-      id: '2',
-      driverName: 'Priya Patel',
-      driverInitial: 'P',
-      from: 'Nerul Station',
-      to: 'Seawoods',
-      date: 'Tomorrow',
-      time: '09:00 - 09:30',
-      seats: 2,
-      cost: 40,
-      status: 'confirmed',
-      isPlaceholder: true,
-      rating: 4.9,
-      trips: 203,
-      verified: true,
-      carModel: 'Maruti Swift',
-      isDriver: false
-    }
-  ];
-
-  const placeholderPast = [
-    {
-      id: 'past-1',
-      driverName: 'Rahul Verma',
-      driverInitial: 'R',
-      from: 'SIES College',
-      to: 'Nerul Station',
-      date: 'Yesterday',
-      time: '08:00 - 08:30',
-      seats: 2,
-      cost: 45,
-      status: 'completed',
-      isPlaceholder: true,
-      rating: 4.7,
-      trips: 89,
-      verified: true,
-      carModel: 'Honda City',
-      isDriver: false
-    }
-  ];
-
-  const placeholderPosted = [
-    {
-      id: 'posted-1',
-      from: 'SIES College',
-      to: 'Vashi Station',
-      date: 'Tomorrow',
-      time: '08:00 - 08:30',
-      seats: 4,
-      availableSeats: 2,
-      cost: 50,
-      status: 'active',
-      isPlaceholder: true,
-      isDriver: true,
-      passengers: [
-        { name: 'Rahul', rating: 4.5, initial: 'R' },
-        { name: 'Priya', rating: 4.8, initial: 'P' }
-      ]
-    },
-    {
-      id: 'posted-2',
-      from: 'Seawoods Station',
-      to: 'Palm Beach Road',
-      date: 'Friday',
-      time: '18:00 - 18:25',
-      seats: 3,
-      availableSeats: 1,
-      cost: 45,
-      status: 'active',
-      isPlaceholder: true,
-      isDriver: true,
-      passengers: [
-        { name: 'Mike', rating: 4.9, initial: 'M' }
-      ]
-    }
-  ];
-
-  const displayBookedRides = filteredBookedRides.length > 0 ? filteredBookedRides : 
-    activeTab === 'upcoming' ? placeholderUpcoming : 
-    activeTab === 'past' ? placeholderPast : [];
-
-  const displayPostedRides = postedRides.length > 0 ? postedRides : placeholderPosted;
+  const displayBookedRides = filteredBookedRides;
+  const displayPostedRides = postedRides;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -251,6 +161,19 @@ export default function MyRidesScreen() {
 
   const handleManageRide = (ride: any) => {
     console.log('Manage ride:', ride.id);
+  };
+
+  const handleChatWithPassenger = (req: any) => {
+    const chatId = `ride_${req.rideId}_${req.passengerId}_${user?.uid}`;
+    (navigation as any).navigate('ChatRoom', { chatId, userName: req.passengerName, receiverId: req.passengerId });
+  };
+
+  const handleAcceptRequest = async (req: any) => {
+    try {
+      await acceptRideRequest({ id: req.id });
+    } catch (e) {
+      // swallow for now
+    }
   };
 
   return (
@@ -330,9 +253,7 @@ export default function MyRidesScreen() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>My Posted Rides</Text>
-                <Text style={styles.sectionSubtitle}>
-                  {displayPostedRides.length} active rides • {displayPostedRides.reduce((acc, ride) => acc + (ride.passengers?.length || 0), 0)} passengers
-                </Text>
+                <Text style={styles.sectionSubtitle}>{displayPostedRides.length} posted rides</Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Text style={styles.filterText}>Filter</Text>
@@ -345,11 +266,6 @@ export default function MyRidesScreen() {
                 style={[styles.modernCard, styles.cardElevated]}
                 activeOpacity={0.9}
               >
-                {ride.isPlaceholder && (
-                  <View style={styles.placeholderBadge}>
-                    <Text style={styles.placeholderBadgeText}>Sample Ride</Text>
-                  </View>
-                )}
                 
                 {/* Status Badge */}
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(ride.status) + '20' }]}>
@@ -402,8 +318,8 @@ export default function MyRidesScreen() {
                   <View style={styles.detailItem}>
                     <Text style={styles.detailIcon}>💺</Text>
                     <View>
-                      <Text style={styles.detailLabel}>Seats</Text>
-                      <Text style={styles.detailValue}>{ride.availableSeats}/{ride.seats}</Text>
+                      <Text style={styles.detailLabel}>Seats Available</Text>
+                      <Text style={styles.detailValue}>{ride.availableSeats}</Text>
                     </View>
                   </View>
                   <View style={styles.detailItem}>
@@ -415,8 +331,33 @@ export default function MyRidesScreen() {
                   </View>
                 </View>
 
+                {/* Incoming Requests */}
+                {requests.filter((r) => r.rideId === ride.id && r.status === 'PENDING').length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>Requests</Text>
+                    {requests.filter((r) => r.rideId === ride.id && r.status === 'PENDING').map((r) => (
+                      <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={[styles.avatar, styles.avatarGradientSecondary, { width: 36, height: 36, borderRadius: 18, marginRight: 10 }]}>
+                            <Text style={styles.avatarText}>{(r.passengerName || 'U')[0].toUpperCase()}</Text>
+                          </View>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>{r.passengerName}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <TouchableOpacity style={[styles.secondaryButton, { marginRight: 8 }]} onPress={() => handleChatWithPassenger(r)}>
+                            <Text style={styles.secondaryButtonText}>Chat</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={[styles.primaryButton, styles.buttonElevated]} onPress={() => handleAcceptRequest(r)}>
+                            <Text style={styles.primaryButtonText}>Accept</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
                 {/* Passengers */}
-                {ride.passengers && ride.passengers.length > 0 && (
+                {Array.isArray((ride as any).passengers) && (ride as any).passengers.length > 0 && (
                   <View style={styles.passengersSection}>
                     <Text style={styles.passengersTitle}>Passengers ({ride.passengers.length})</Text>
                     <View style={styles.passengersList}>
@@ -442,14 +383,11 @@ export default function MyRidesScreen() {
 
                 {/* Action Button */}
                 <TouchableOpacity 
-                  style={[styles.primaryButton, styles.buttonElevated, ride.isPlaceholder && styles.buttonDisabled]}
+                  style={[styles.primaryButton, styles.buttonElevated]}
                   onPress={() => handleManageRide(ride)}
-                  disabled={ride.isPlaceholder}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.primaryButtonText}>
-                    {ride.isPlaceholder ? 'Sample Ride' : 'Manage Ride'}
-                  </Text>
+                  <Text style={styles.primaryButtonText}>Manage Ride</Text>
                 </TouchableOpacity>
               </TouchableOpacity>
             ))}

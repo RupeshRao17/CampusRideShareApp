@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useAuthState } from '@lib/firebase';
 import { useNavigation } from '@react-navigation/native';
+import { listenUserChats } from '@services/chat';
 
 export default function ChatsScreen() {
   const navigation = useNavigation();
@@ -9,62 +10,6 @@ export default function ChatsScreen() {
   const [chats, setChats] = useState<any[]>([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-
-  // Placeholder chat data
-  const placeholderChats = [
-    {
-      id: '1',
-      userId: 'user1',
-      userName: 'Alex Sharma',
-      lastMessage: 'Hey, are we still meeting at 5?',
-      timestamp: '2 min ago',
-      unreadCount: 2,
-      userDepartment: 'Computer Engineering',
-      userYear: '3rd Year',
-      userRating: 4.8,
-      userInitial: 'A',
-      verified: true
-    },
-    {
-      id: '2',
-      userId: 'user2',
-      userName: 'Priya Patel',
-      lastMessage: 'Thanks for the ride yesterday! 🚗',
-      timestamp: '1 hour ago',
-      unreadCount: 0,
-      userDepartment: 'Electronics',
-      userYear: '2nd Year',
-      userRating: 4.9,
-      userInitial: 'P',
-      verified: true
-    },
-    {
-      id: '3',
-      userId: 'user3',
-      userName: 'Rahul Verma',
-      lastMessage: 'I\'ll be waiting at the main gate',
-      timestamp: '3 hours ago',
-      unreadCount: 1,
-      userDepartment: 'Mechanical',
-      userYear: '4th Year',
-      userRating: 4.7,
-      userInitial: 'R',
-      verified: false
-    },
-    {
-      id: '4',
-      userId: 'user4',
-      userName: 'Sneha Joshi',
-      lastMessage: 'Can we reschedule for tomorrow?',
-      timestamp: 'Yesterday',
-      unreadCount: 0,
-      userDepartment: 'IT Engineering',
-      userYear: '2nd Year',
-      userRating: 4.9,
-      userInitial: 'S',
-      verified: true
-    }
-  ];
 
   useEffect(() => {
     Animated.parallel([
@@ -81,13 +26,21 @@ export default function ChatsScreen() {
     ]).start();
   }, []);
 
-  const displayChats = chats.length > 0 ? chats : placeholderChats;
+  useEffect(() => {
+    const uid = (profile as any)?.id || (profile as any)?.uid || null;
+    if (!uid) return;
+    const unsub = listenUserChats(uid, setChats);
+    return () => unsub();
+  }, [profile]);
+
+  const displayChats = chats;
 
   const handleChatPress = (chat: any) => {
-    navigation.navigate('ChatRoom' as never, {
+    (navigation as any).navigate('ChatRoom', {
       chatId: chat.id,
       userName: chat.userName,
-    } as never);
+      receiverId: chat.userId,
+    });
   };
 
   return (
@@ -134,7 +87,7 @@ export default function ChatsScreen() {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Recent Chats</Text>
-            <Text style={styles.sectionSubtitle}>{displayChats.length} conversations • Active now</Text>
+            <Text style={styles.sectionSubtitle}>{displayChats.length} conversations</Text>
           </View>
           <TouchableOpacity style={styles.filterButton}>
             <Text style={styles.filterText}>Sort</Text>

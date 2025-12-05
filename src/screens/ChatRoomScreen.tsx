@@ -17,8 +17,9 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 export default function ChatRoomScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
-  const chatId = route.params?.chatId || 'demo';
-  const userName = route.params?.userName || 'User';
+  const chatId = route.params?.chatId;
+  const userName = route.params?.userName || '';
+  const receiverIdParam = route.params?.receiverId || '';
   const { user, profile } = useAuthState();
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
@@ -44,41 +45,7 @@ export default function ChatRoomScreen() {
     return () => unsub();
   }, [chatId]);
 
-  // Placeholder messages for demo
-  const placeholderMessages = [
-    {
-      id: '1',
-      senderId: 'other',
-      message: 'Hi! Are you available for the ride tomorrow?',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: '2',
-      senderId: user?.uid,
-      message: 'Yes, I can give you a ride. What time works for you?',
-      timestamp: new Date(Date.now() - 3500000).toISOString(),
-    },
-    {
-      id: '3',
-      senderId: 'other',
-      message: 'Around 5 PM would be perfect for me 🕔',
-      timestamp: new Date(Date.now() - 3400000).toISOString(),
-    },
-    {
-      id: '4',
-      senderId: user?.uid,
-      message: 'Great! I\'ll pick you up from SIES main gate at 5 PM',
-      timestamp: new Date(Date.now() - 3300000).toISOString(),
-    },
-    {
-      id: '5',
-      senderId: 'other',
-      message: 'Sounds good. Looking forward to it! 😊',
-      timestamp: new Date(Date.now() - 3200000).toISOString(),
-    },
-  ];
-
-  const displayMessages = messages.length > 0 ? messages : placeholderMessages;
+  const displayMessages = messages;
 
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('en-US', { 
@@ -92,7 +59,7 @@ export default function ChatRoomScreen() {
     if (!user || !text.trim()) return;
     sendMessage(chatId, { 
       senderId: user.uid, 
-      receiverId: 'peer', 
+      receiverId: receiverIdParam, 
       message: text.trim(),
     });
     setText('');

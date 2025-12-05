@@ -84,17 +84,115 @@ export async function signOut() {
   if (error) throw error;
 }
 
+function toCamelFromRides(row: any) {
+  return {
+    id: row.id,
+    driverId: row.driver_id,
+    driverName: row.driver_name,
+    from: row.from_location,
+    to: row.to_destination,
+    date: row.date,
+    time: row.time,
+    availableSeats: row.available_seats,
+    cost: row.cost,
+    allowedGender: row.allowed_gender,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+function toCamelFromTrainPosts(row: any) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.user_name,
+    trainName: row.train_name,
+    fromStation: row.from_station,
+    toStation: row.to_station,
+    arrivalStation: row.arrival_station,
+    arrivalTime: row.arrival_time,
+    passengersCount: row.passengers_count,
+    allowedGender: row.allowed_gender,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+function toCamelFromRideRequests(row: any) {
+  return {
+    id: row.id,
+    rideId: row.ride_id,
+    driverId: row.driver_id,
+    passengerId: row.passenger_id,
+    passengerName: row.passenger_name,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+function toSnakeForRides(data: any) {
+  return {
+    driver_id: data.driverId,
+    driver_name: data.driverName,
+    from_location: data.from,
+    to_destination: data.to,
+    date: data.date,
+    time: data.time,
+    available_seats: data.availableSeats,
+    cost: data.cost,
+    allowed_gender: data.allowedGender,
+    status: data.status,
+  };
+}
+
+function toSnakeForTrainPosts(data: any) {
+  return {
+    user_id: data.userId,
+    user_name: data.userName,
+    train_name: data.trainName,
+    from_station: data.fromStation,
+    to_station: data.toStation,
+    arrival_station: data.arrivalStation,
+    arrival_time: data.arrivalTime,
+    passengers_count: data.passengersCount,
+    allowed_gender: data.allowedGender,
+    status: data.status,
+  };
+}
+
+function toSnakeForRideRequests(data: any) {
+  return {
+    ride_id: data.rideId,
+    driver_id: data.driverId,
+    passenger_id: data.passengerId,
+    passenger_name: data.passengerName,
+    status: data.status,
+  };
+}
+
 export function listenCollection(path: string, cb: (docs: any[]) => void) {
   const map: Record<string, string> = {
     users: 'profiles',
     rides: 'rides',
     trainPosts: 'train_posts',
+    rideRequests: 'ride_requests',
   };
   const table = map[path] || path;
   let stopped = false;
   const fetchAndNotify = async () => {
     const { data } = await supabase.from(table).select('*');
-    if (!stopped) cb((data || []).map((d: any) => ({ id: d.id, ...d })));
+    if (!stopped) {
+      const rows = data || [];
+      if (table === 'rides') {
+        cb(rows.map(toCamelFromRides));
+      } else if (table === 'train_posts') {
+        cb(rows.map(toCamelFromTrainPosts));
+      } else if (table === 'ride_requests') {
+        cb(rows.map(toCamelFromRideRequests));
+      } else {
+        cb(rows.map((d: any) => ({ id: d.id, ...d })));
+      }
+    }
   };
   fetchAndNotify();
   const channel = supabase
@@ -114,8 +212,29 @@ export async function addToCollection(path: string, data: any) {
     users: 'profiles',
     rides: 'rides',
     trainPosts: 'train_posts',
+    rideRequests: 'ride_requests',
   };
   const table = map[path] || path;
-  const { error } = await supabase.from(table).insert(data);
+  let payload = data;
+  if (table === 'rides') payload = toSnakeForRides(data);
+  else if (table === 'train_posts') payload = toSnakeForTrainPosts(data);
+  else if (table === 'ride_requests') payload = toSnakeForRideRequests(data);
+  const { error } = await supabase.from(table).insert(payload);
+  if (error) throw error;
+}
+
+export async function updateCollection(path: string, id: string, data: any) {
+  const map: Record<string, string> = {
+    users: 'profiles',
+    rides: 'rides',
+    trainPosts: 'train_posts',
+    rideRequests: 'ride_requests',
+  };
+  const table = map[path] || path;
+  let payload = data;
+  if (table === 'rides') payload = toSnakeForRides({ ...data });
+  else if (table === 'train_posts') payload = toSnakeForTrainPosts({ ...data });
+  else if (table === 'ride_requests') payload = toSnakeForRideRequests({ ...data });
+  const { error } = await supabase.from(table).update(payload).eq('id', id);
   if (error) throw error;
 }
