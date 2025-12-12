@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
-import { getRideRequestsForDriver, acceptRideRequest } from '@services/data';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
+import { getRideRequestsForDriver, acceptRideAndCreateBooking, denyRideRequest, getMyBookings, submitRating } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
 import { getMyRides } from '@services/data';
 import { useAuthState } from '@lib/firebase';
@@ -13,6 +13,7 @@ export default function MyRidesScreen() {
   const navigation = useNavigation();
   const { user, profile } = useAuthState();
   const [rides, setRides] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -27,6 +28,12 @@ export default function MyRidesScreen() {
   useEffect(() => {
     if (!user) return;
     const unsub = getRideRequestsForDriver(user.uid, setRequests);
+    return () => unsub();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = getMyBookings(user.uid, setBookings);
     return () => unsub();
   }, [user?.uid]);
 
@@ -77,16 +84,27 @@ export default function MyRidesScreen() {
   };
 
   // Filter rides based on active tab
-  const bookedRides: any[] = [];
+  const bookedRides: any[] = bookings.map((b) => ({
+    id: b.id,
+    from: rides.find((r) => r.id === b.rideId)?.from || '',
+    to: rides.find((r) => r.id === b.rideId)?.to || '',
+    date: b.date,
+    time: b.time,
+    status: b.status.toLowerCase(),
+    cost: rides.find((r) => r.id === b.rideId)?.cost || 0,
+    driverName: rides.find((r) => r.id === b.rideId)?.driverName || '',
+    driverId: b.driverId,
+    passengerId: b.passengerId,
+  }));
   const postedRides = rides;
 
-  const filteredBookedRides = bookedRides.filter(ride => {
-    if (activeTab === 'upcoming') {
-      return !ride.isCompleted;
-    } else if (activeTab === 'past') {
-      return ride.isCompleted;
-    }
-    return false;
+  const filteredBookedRides = bookedRides.filter((ride) => {
+    const [start, end] = String(ride.time || '').split(' - ');
+    const [dd, mm, yyyy] = String(ride.date || '').split('/').map((x: any) => parseInt(x, 10));
+    const [eh, em] = (end || '').split(':').map((x: any) => parseInt(x, 10));
+    const endTs = (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) ? new Date(yyyy, (mm || 1) - 1, dd || 1, eh || 0, em || 0).getTime() : 0;
+    const isUpcoming = endTs === 0 || endTs > Date.now();
+    return activeTab === 'upcoming' ? isUpcoming : !isUpcoming;
   });
 
   const displayBookedRides = filteredBookedRides;
@@ -155,9 +173,8 @@ export default function MyRidesScreen() {
     console.log('Cancel ride:', ride.id);
   };
 
-  const handleRateRide = (ride: any) => {
-    console.log('Rate ride:', ride.id);
-  };
+  // legacy no-op retained
+  const handleRateRideLegacy = (_ride: any) => {};
 
   const handleManageRide = (ride: any) => {
     console.log('Manage ride:', ride.id);
@@ -170,10 +187,26 @@ export default function MyRidesScreen() {
 
   const handleAcceptRequest = async (req: any) => {
     try {
-      await acceptRideRequest({ id: req.id });
-    } catch (e) {
-      // swallow for now
-    }
+      await acceptRideAndCreateBooking({ id: req.id, rideId: req.rideId, driverId: req.driverId, passengerId: req.passengerId });
+    } catch (e) {}
+  };
+
+  const handleDenyRequest = async (req: any) => {
+    try {
+      await denyRideRequest({ id: req.id });
+    } catch (e) {}
+  };
+
+  const handleRateRide = async (ride: any) => {
+    const isDriver = ride.driverId === user?.uid;
+    const rateeId = isDriver ? ride.passengerId : ride.driverId;
+    if (!user || !rateeId) return;
+    Alert.alert('Rate Ride', 'Select a rating', [
+      { text: '⭐ 3', onPress: async () => { await submitRating(ride.id, user.uid, rateeId, 3); } },
+      { text: '⭐ 4', onPress: async () => { await submitRating(ride.id, user.uid, rateeId, 4); } },
+      { text: '⭐ 5', onPress: async () => { await submitRating(ride.id, user.uid, rateeId, 5); } },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   return (
@@ -350,6 +383,9 @@ export default function MyRidesScreen() {
                           <TouchableOpacity style={[styles.primaryButton, styles.buttonElevated]} onPress={() => handleAcceptRequest(r)}>
                             <Text style={styles.primaryButtonText}>Accept</Text>
                           </TouchableOpacity>
+                          <TouchableOpacity style={[styles.cancelButton]} onPress={() => handleDenyRequest(r)}>
+                            <Text style={styles.cancelButtonText}>Deny</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     ))}
@@ -476,7 +512,7 @@ export default function MyRidesScreen() {
                     
                     <View style={styles.priceSection}>
                       <Text style={styles.priceAmount}>₹{ride.cost}</Text>
-                      <Text style={styles.priceLabel}>paid</Text>
+                      <Text style={styles.priceLabel}>{activeTab === 'upcoming' ? 'pay at ride' : 'paid'}</Text>
                     </View>
                   </View>
 

@@ -118,6 +118,30 @@ function toCamelFromTrainPosts(row: any) {
   };
 }
 
+function toCamelFromBookings(row: any) {
+  return {
+    id: row.id,
+    rideId: row.ride_id,
+    driverId: row.driver_id,
+    passengerId: row.passenger_id,
+    status: row.status,
+    date: row.date,
+    time: row.time,
+    createdAt: row.created_at,
+  };
+}
+
+function toCamelFromRatings(row: any) {
+  return {
+    id: row.id,
+    bookingId: row.booking_id,
+    raterId: row.rater_id,
+    rateeId: row.ratee_id,
+    score: row.score,
+    createdAt: row.created_at,
+  };
+}
+
 function toCamelFromRideRequests(row: any) {
   return {
     id: row.id,
@@ -160,6 +184,26 @@ function toSnakeForTrainPosts(data: any) {
   };
 }
 
+function toSnakeForBookings(data: any) {
+  return {
+    ride_id: data.rideId,
+    driver_id: data.driverId,
+    passenger_id: data.passengerId,
+    status: data.status,
+    date: data.date,
+    time: data.time,
+  };
+}
+
+function toSnakeForRatings(data: any) {
+  return {
+    booking_id: data.bookingId,
+    rater_id: data.raterId,
+    ratee_id: data.rateeId,
+    score: data.score,
+  };
+}
+
 function toSnakeForRideRequests(data: any) {
   return {
     ride_id: data.rideId,
@@ -176,6 +220,8 @@ export function listenCollection(path: string, cb: (docs: any[]) => void) {
     rides: 'rides',
     trainPosts: 'train_posts',
     rideRequests: 'ride_requests',
+    bookings: 'bookings',
+    ratings: 'ratings',
   };
   const table = map[path] || path;
   let stopped = false;
@@ -189,6 +235,10 @@ export function listenCollection(path: string, cb: (docs: any[]) => void) {
         cb(rows.map(toCamelFromTrainPosts));
       } else if (table === 'ride_requests') {
         cb(rows.map(toCamelFromRideRequests));
+      } else if (table === 'bookings') {
+        cb(rows.map(toCamelFromBookings));
+      } else if (table === 'ratings') {
+        cb(rows.map(toCamelFromRatings));
       } else {
         cb(rows.map((d: any) => ({ id: d.id, ...d })));
       }
@@ -213,12 +263,16 @@ export async function addToCollection(path: string, data: any) {
     rides: 'rides',
     trainPosts: 'train_posts',
     rideRequests: 'ride_requests',
+    bookings: 'bookings',
+    ratings: 'ratings',
   };
   const table = map[path] || path;
   let payload = data;
   if (table === 'rides') payload = toSnakeForRides(data);
   else if (table === 'train_posts') payload = toSnakeForTrainPosts(data);
   else if (table === 'ride_requests') payload = toSnakeForRideRequests(data);
+  else if (table === 'bookings') payload = toSnakeForBookings(data);
+  else if (table === 'ratings') payload = toSnakeForRatings(data);
   const { error } = await supabase.from(table).insert(payload);
   if (error) throw error;
 }
@@ -229,6 +283,8 @@ export async function updateCollection(path: string, id: string, data: any) {
     rides: 'rides',
     trainPosts: 'train_posts',
     rideRequests: 'ride_requests',
+    bookings: 'bookings',
+    ratings: 'ratings',
   };
   const table = map[path] || path;
   let payload = data;

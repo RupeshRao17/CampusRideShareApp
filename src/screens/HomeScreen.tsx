@@ -97,6 +97,11 @@ export default function ModernHomeScreen() {
     (navigation as any).navigate('ChatRoom', { chatId, userName: ride.driverName, receiverId: ride.driverId });
   };
 
+  const handleConnectTrain = (train: any) => {
+    const chatId = `train_${train.id}_${user?.uid || 'guest'}_${train.userId}`;
+    (navigation as any).navigate('ChatRoom', { chatId, userName: train.userName, receiverId: train.userId });
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -379,6 +384,7 @@ export default function ModernHomeScreen() {
                   <TouchableOpacity 
                     style={[styles.primaryButton, styles.buttonElevated, styles.connectButton]}
                     activeOpacity={0.8}
+                    onPress={() => handleConnectTrain(train)}
                   >
                     <Text style={styles.primaryButtonText}>Connect</Text>
                   </TouchableOpacity>
