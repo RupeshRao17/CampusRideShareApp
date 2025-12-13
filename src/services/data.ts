@@ -102,3 +102,18 @@ export async function submitRating(bookingId: string, raterId: string, rateeId: 
   const avg = scores.length ? (scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1) : '5.0';
   await supabase.from('profiles').update({ rating: avg }).eq('id', rateeId);
 }
+
+export async function cancelBooking(bookingId: number) {
+  const { data: booking } = await supabase.from('bookings').select('*').eq('id', bookingId).single();
+  if (!booking) return;
+  const rideId = booking.ride_id;
+  await supabase.from('bookings').update({ status: 'CANCELLED' }).eq('id', bookingId);
+  const { data: rideRow } = await supabase.from('rides').select('*').eq('id', rideId).single();
+  const currentSeats = rideRow?.available_seats ?? 0;
+  await supabase.from('rides').update({ available_seats: currentSeats + 1 }).eq('id', rideId);
+}
+
+export async function deleteRide(rideId: string) {
+  const { error } = await supabase.from('rides').delete().eq('id', rideId);
+  if (error) throw error;
+}

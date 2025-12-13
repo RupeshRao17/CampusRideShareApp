@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
-import { getRideRequestsForDriver, acceptRideAndCreateBooking, denyRideRequest, getMyBookings, submitRating } from '@services/data';
+import { getRideRequestsForDriver, acceptRideAndCreateBooking, denyRideRequest, getMyBookings, submitRating, cancelBooking, deleteRide } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
 import { getMyRides } from '@services/data';
-import { useAuthState } from '@lib/firebase';
+import { useAuthState, supabase, listenCollection } from '@lib/firebase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -16,6 +16,8 @@ export default function MyRidesScreen() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
+  const [rideMap, setRideMap] = useState<Record<string, any>>({});
+  const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -36,6 +38,34 @@ export default function MyRidesScreen() {
     const unsub = getMyBookings(user.uid, setBookings);
     return () => unsub();
   }, [user?.uid]);
+
+  useEffect(() => {
+    const unsub = listenCollection('rides', (docs) => {
+      const map: Record<string, any> = {};
+      for (const d of docs) map[d.id] = d;
+      setRideMap(map);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const driverIds = Array.from(new Set((bookings || [])
+      .map((b: any) => rideMap[b.rideId]?.driverId)
+      .filter(Boolean)));
+    if (driverIds.length === 0) {
+      setDriverProfiles({});
+      return;
+    }
+    supabase
+      .from('profiles')
+      .select('id,department,year,rating')
+      .in('id', driverIds)
+      .then(({ data }) => {
+        const map: Record<string, any> = {};
+        for (const p of data || []) map[p.id] = p;
+        setDriverProfiles(map);
+      });
+  }, [bookings, rideMap]);
 
   useEffect(() => {
     Animated.parallel([
@@ -84,18 +114,27 @@ export default function MyRidesScreen() {
   };
 
   // Filter rides based on active tab
-  const bookedRides: any[] = bookings.map((b) => ({
-    id: b.id,
-    from: rides.find((r) => r.id === b.rideId)?.from || '',
-    to: rides.find((r) => r.id === b.rideId)?.to || '',
-    date: b.date,
-    time: b.time,
-    status: b.status.toLowerCase(),
-    cost: rides.find((r) => r.id === b.rideId)?.cost || 0,
-    driverName: rides.find((r) => r.id === b.rideId)?.driverName || '',
-    driverId: b.driverId,
-    passengerId: b.passengerId,
-  }));
+  const bookedRides: any[] = bookings.map((b) => {
+    const ride = rideMap[b.rideId] || rides.find((r) => r.id === b.rideId) || {};
+    const driverName = ride.driverName || '';
+    const driverId = b.driverId;
+    const profile = driverId ? driverProfiles[driverId] : undefined;
+    return {
+      id: b.id,
+      from: ride.from || '',
+      to: ride.to || '',
+      date: b.date,
+      time: b.time,
+      status: String(b.status || '').toLowerCase(),
+      cost: ride.cost || 0,
+      driverName,
+      driverInitial: (driverName || 'U')[0]?.toUpperCase?.() || 'U',
+      rating: profile?.rating || '5.0',
+      carModel: profile?.department || '',
+      driverId: b.driverId,
+      passengerId: b.passengerId,
+    };
+  });
   const postedRides = rides;
 
   const filteredBookedRides = bookedRides.filter((ride) => {
@@ -166,18 +205,56 @@ export default function MyRidesScreen() {
   };
 
   const handleChatWithRider = (ride: any) => {
-    console.log('Chat with rider:', ride.driverName);
+    const chatId = `ride_${ride.id}_${user?.uid || 'guest'}_${ride.driverId}`;
+    (navigation as any).navigate('ChatRoom', { chatId, userName: ride.driverName, receiverId: ride.driverId });
   };
 
-  const handleCancelRide = (ride: any) => {
-    console.log('Cancel ride:', ride.id);
+  const handleCancelRide = async (ride: any) => {
+    if (!user) return;
+    const myBooking = (bookings || []).find((b: any) => b.id === ride.id || (b.rideId === ride.id && b.passengerId === user.uid && String(b.status).toUpperCase() === 'CONFIRMED'));
+    if (!myBooking) {
+      Alert.alert('No Booking', 'Could not find your booking to cancel');
+      return;
+    }
+    try {
+      await cancelBooking(Number(myBooking.id));
+      Alert.alert('Cancelled', 'Your booking has been cancelled');
+    } catch (e) {
+      Alert.alert('Error', 'Could not cancel booking');
+    }
   };
 
   // legacy no-op retained
   const handleRateRideLegacy = (_ride: any) => {};
 
   const handleManageRide = (ride: any) => {
-    console.log('Manage ride:', ride.id);
+    if (!user) return;
+    const confirmedForRide = (bookings || []).filter((b: any) => b.rideId === ride.id && b.driverId === user.uid && String(b.status).toUpperCase() === 'CONFIRMED');
+    const cancelAction = async () => {
+      if (confirmedForRide.length === 0) {
+        Alert.alert('No confirmed bookings');
+        return;
+      }
+      try {
+        await cancelBooking(Number(confirmedForRide[0].id));
+        Alert.alert('Cancelled', 'Passenger booking has been cancelled');
+      } catch (e) {
+        Alert.alert('Error', 'Could not cancel booking');
+      }
+    };
+    const deleteAction = async () => {
+      try {
+        await deleteRide(ride.id);
+        Alert.alert('Deleted', 'Ride has been deleted');
+      } catch (e) {
+        Alert.alert('Error', 'Could not delete ride');
+      }
+    };
+    Alert.alert('Manage Ride', 'Choose an action', [
+      { text: 'Cancel Booking', onPress: cancelAction },
+      { text: 'Delete Ride', style: 'destructive', onPress: deleteAction },
+      { text: 'Close', style: 'cancel' },
+    ]);
   };
 
   const handleChatWithPassenger = (req: any) => {
