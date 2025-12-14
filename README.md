@@ -1,20 +1,25 @@
 # Campus RideShare App
 
-A cross‑platform mobile app for campus commuters to post rides, find train buddies, request seats, chat, manage bookings, and rate each other — powered end‑to‑end by Supabase for auth, database, realtime, and row‑level security.
+The Campus RideShare App is a React Native with TypeScript + SupaBase-based mobile application designed for college students to share rides and connect during commutes. The app allows verified users to either offer car rides or find companions traveling by train, making travel safer, cost-effective, and eco-friendly. 
 
 ## Objectives
-- Enable students to safely offer and request rides.
-- Persist all actions to Supabase with RLS‑safe access.
-- Show live availability and hide expired rides automatically.
-- Provide chat between driver–passenger and train buddies.
-- Support booking management (accept/deny/cancel) and mutual ratings.
+- To develop a verified, student-only platform for carpool and train commute coordination.
+- 	To implement SupabaseAuthentication restricted to SIES email domains.
+- 	To enable realtime ride posting, joining, and chat features.
+-	To introduce a “Train Travel Connect” module for shared train travel coordination.
+-	To ensure safety via gender-based visibility and report mechanisms.
+-	To integrate Google Maps for address autocomplete and route previews.
+-	To provide a clean, structured UI with intuitive navigation and accessibility.
+
 
 ## Features
 - Post car rides and train buddy posts.
 - Live “Available Rides” filtered by gender policy and time validity.
 - Ride requests → driver can accept/deny; acceptance creates a booking and decrements seats.
+- Users can post train details (train name, station, arrival time) and find others arriving simultaneously.
 - Upcoming vs Past classification based on ride end time.
 - Manage posted rides: cancel a confirmed passenger, delete ride.
+- One-to-one chat using Firebase Realtime Database between driver and passenger or train companions.
 - Passenger can cancel their own booking; seat count restored.
 - Ratings: both parties can rate each other; average rating shown on profile.
 - Realtime updates using Supabase channel subscriptions.
