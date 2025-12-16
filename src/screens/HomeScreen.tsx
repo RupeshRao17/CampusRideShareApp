@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { useAuthState, supabase } from '@lib/firebase';
 import { getActiveRides, getActiveTrainPosts, requestRide } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 
 type TabType = 'rides' | 'trains';
 
@@ -14,34 +13,63 @@ export default function ModernHomeScreen() {
   const { user, profile } = useAuthState();
   const [activeTab, setActiveTab] = useState<TabType>('rides');
   const [searchFocused, setSearchFocused] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  
   const [rides, setRides] = useState<any[]>([]);
   const [trains, setTrains] = useState<any[]>([]);
   const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
+  const [loadingRides, setLoadingRides] = useState(true);
+  const [loadingTrains, setLoadingTrains] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profile?.gender) return;
-    const unsub = getActiveRides(profile.gender, setRides);
+    if (!profile?.gender) {
+      setLoadingRides(false);
+      setError('Please complete your profile to see rides');
+      return;
+    }
+    
+    setError(null);
+    setLoadingRides(true);
+    
+    const unsub = getActiveRides(profile.gender, (ridesData) => {
+      setRides(ridesData);
+      setLoadingRides(false);
+    });
+    
     return () => unsub();
   }, [profile?.gender]);
 
   useEffect(() => {
-    const unsub = getActiveTrainPosts(setTrains);
+    setLoadingTrains(true);
+    const unsub = getActiveTrainPosts((trainsData) => {
+      setTrains(trainsData);
+      setLoadingTrains(false);
+    });
+    
     return () => unsub();
   }, []);
 
   useEffect(() => {
     const ids = Array.from(new Set(rides.map((r) => r.driverId).filter(Boolean)));
+    
     if (ids.length === 0) {
       setDriverProfiles({});
       return;
     }
+    
     supabase
       .from('profiles')
       .select('id,department,year,rating')
       .in('id', ids)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error fetching driver profiles:', error);
+          return;
+        }
         const map: Record<string, any> = {};
         for (const p of data || []) map[p.id] = p;
         setDriverProfiles(map);
@@ -49,33 +77,38 @@ export default function ModernHomeScreen() {
   }, [rides]);
 
   const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
+    if (activeTab === tab || isAnimating) return;
+    
+    setIsAnimating(true);
+    // Fade out current content
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
-        toValue: 50,
-        duration: 200,
+        toValue: 20,
+        duration: 150,
         useNativeDriver: true,
       }),
     ]).start(() => {
+      setActiveTab(tab);
       fadeAnim.setValue(0);
-      slideAnim.setValue(50);
+      slideAnim.setValue(20);
+      
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 250,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 250,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => setIsAnimating(false));
     });
   };
 
@@ -100,6 +133,259 @@ export default function ModernHomeScreen() {
   const handleConnectTrain = (train: any) => {
     const chatId = `train_${train.id}_${user?.uid || 'guest'}_${train.userId}`;
     (navigation as any).navigate('ChatRoom', { chatId, userName: train.userName, receiverId: train.userId });
+  };
+
+  const renderRidesContent = () => {
+    if (loadingRides) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.loadingText}>Loading available rides...</Text>
+        </View>
+      );
+    }
+    
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      );
+    }
+    
+    if (rides.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <Text style={styles.emptyEmoji}>🚗</Text>
+          </View>
+          <Text style={styles.emptyTitle}>No rides available</Text>
+          <Text style={styles.emptySubtitle}>
+            Check back later or post your own ride
+          </Text>
+        </View>
+      );
+    }
+    
+    return rides.map((ride) => (
+      <TouchableOpacity 
+        key={ride.id} 
+        style={[styles.modernCard, styles.cardElevated]}
+        activeOpacity={0.9}
+        delayPressIn={50}
+      >
+        {/* Top Section */}
+        <View style={styles.cardTopSection}>
+          <View style={styles.driverRow}>
+            <View style={styles.avatarContainer}>
+              <View style={[styles.avatar, styles.avatarGradient]}>
+                <Text style={styles.avatarText}>{(ride.driverName || 'U')[0].toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={styles.driverDetails}>
+              <Text style={styles.driverName}>{ride.driverName}</Text>
+              <View style={styles.metaRow}>
+                <View style={styles.ratingPill}>
+                  <Text style={styles.ratingStar}>★</Text>
+                  <Text style={styles.ratingText}>{driverProfiles[ride.driverId]?.rating || '5.0'}</Text>
+                </View>
+                <View style={styles.carInfo}>
+                  <Text style={styles.carText}>{driverProfiles[ride.driverId]?.department || ''}</Text>
+                </View>
+                <Text style={styles.tripCount}>{driverProfiles[ride.driverId]?.year || ''}</Text>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.priceSection}>
+            <Text style={styles.priceAmount}>₹{ride.cost}</Text>
+            <Text style={styles.priceLabel}>per seat</Text>
+          </View>
+        </View>
+
+        {/* Simple Route Section */}
+        <View style={styles.routeSection}>
+          <View style={styles.timeline}>
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineDot} />
+            </View>
+            <View style={styles.timelineLine} />
+            <View style={styles.timelineItem}>
+              <View style={styles.locationIconContainer}>
+                <Text style={styles.locationIcon}>📍</Text>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.routeInfo}>
+            <View style={styles.locationRow}>
+              <View style={styles.locationContent}>
+                <Text style={styles.locationText}>{ride.from}</Text>
+              </View>
+              <Text style={styles.timeText}>{(ride.time || '').split(' - ')[0]}</Text>
+            </View>
+            
+            <View style={styles.locationRow}>
+              <View style={styles.locationContent}>
+                <Text style={styles.locationText}>{ride.to}</Text>
+              </View>
+              <Text style={styles.timeText}>{(ride.time || '').split(' - ')[1]}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom Section */}
+        <View style={styles.cardBottomSection}>
+          <View style={styles.leftMeta}>
+            <View style={styles.seatsContainer}>
+              <View style={styles.seatsIndicator}>
+                {[...Array(3)].map((_, i) => (
+                  <View 
+                    key={i} 
+                    style={[
+                      styles.seatDot, 
+                      i < (ride.availableSeats || 0) ? styles.seatAvailable : styles.seatUnavailable
+                    ]} 
+                  />
+                ))}
+              </View>
+              <Text style={styles.seatsText}>{ride.availableSeats} seats left</Text>
+            </View>
+          </View>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity 
+              style={[styles.secondaryButton]}
+              activeOpacity={0.8}
+              onPress={() => handleChatWithDriver(ride)}
+            >
+              <Text style={styles.secondaryButtonText}>Chat</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.primaryButton, styles.buttonElevated]}
+              activeOpacity={0.8}
+              onPress={() => handleRequestRide(ride)}
+            >
+              <Text style={styles.primaryButtonText}>Request</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    ));
+  };
+
+  const renderTrainsContent = () => {
+    if (loadingTrains) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.loadingText}>Loading train buddies...</Text>
+        </View>
+      );
+    }
+    
+    if (trains.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <Text style={styles.emptyEmoji}>🚆</Text>
+          </View>
+          <Text style={styles.emptyTitle}>No train buddies available</Text>
+          <Text style={styles.emptySubtitle}>
+            Be the first to post your train journey
+          </Text>
+        </View>
+      );
+    }
+    
+    return trains.map((train) => (
+      <TouchableOpacity 
+        key={train.id} 
+        style={[styles.modernCard, styles.cardElevated]}
+        activeOpacity={0.9}
+      >
+        {/* Top Section */}
+        <View style={styles.cardTopSection}>
+          <View style={styles.driverRow}>
+            <View style={styles.avatarContainer}>
+              <View style={[styles.avatar, styles.avatarGradientSecondary]}>
+                <Text style={styles.avatarText}>{(train.userName || 'U')[0].toUpperCase()}</Text>
+              </View>
+            </View>
+            <View style={styles.driverDetails}>
+              <Text style={styles.driverName}>{train.userName}</Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.tripCount}>{train.passengersCount} {train.passengersCount === 1 ? 'traveler' : 'travelers'}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Train Badge */}
+        <View style={styles.trainBadgeContainer}>
+          <View style={styles.trainBadge}>
+            <View style={styles.trainIcon}>
+              <Text style={styles.trainEmoji}>🚆</Text>
+            </View>
+            <View style={styles.trainDetails}>
+              <Text style={styles.trainName}>{train.trainName}</Text>
+              <View style={styles.trainMeta}>
+                <Text style={styles.trainRoute}>{train.fromStation} → {train.toStation}</Text>
+                <View style={styles.coachBadge}>
+                  <Text style={styles.coachText}>General</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Simple Route Section */}
+        <View style={styles.routeSection}>
+          <View style={styles.timeline}>
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineDot} />
+            </View>
+            <View style={styles.timelineLine} />
+            <View style={styles.timelineItem}>
+              <View style={styles.locationIconContainer}>
+                <Text style={styles.locationIcon}>📍</Text>
+              </View>
+            </View>
+          </View>
+          
+          <View style={styles.routeInfo}>
+            <View style={styles.locationRow}>
+              <View style={styles.locationContent}>
+                <Text style={styles.locationText}>{train.arrivalStation} Station</Text>
+              </View>
+              <Text style={styles.timeText}>{train.arrivalTime}</Text>
+            </View>
+            
+            <View style={styles.locationRow}>
+              <View style={styles.locationContent}>
+                <Text style={styles.locationText}>Traveling together</Text>
+              </View>
+              <Text style={styles.timeText}>{train.arrivalTime}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom Section */}
+        <View style={styles.cardBottomSection}>
+          <View style={styles.leftMeta}>
+            <Text style={styles.trainMetaText}>🎫 Local train • 🤝 Travel together</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.primaryButton, styles.buttonElevated, styles.connectButton]}
+            activeOpacity={0.8}
+            onPress={() => handleConnectTrain(train)}
+          >
+            <Text style={styles.primaryButtonText}>Connect</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    ));
   };
 
   return (
@@ -140,6 +426,7 @@ export default function ModernHomeScreen() {
               style={[styles.tabPill, activeTab === 'rides' && styles.tabPillActive]}
               onPress={() => handleTabChange('rides')}
               activeOpacity={0.7}
+              disabled={isAnimating}
             >
               <View style={styles.tabContent}>
                 <Text style={[styles.tabPillText, activeTab === 'rides' && styles.tabPillTextActive]}>
@@ -153,6 +440,7 @@ export default function ModernHomeScreen() {
               style={[styles.tabPill, activeTab === 'trains' && styles.tabPillActive]}
               onPress={() => handleTabChange('trains')}
               activeOpacity={0.7}
+              disabled={isAnimating}
             >
               <View style={styles.tabContent}>
                 <Text style={[styles.tabPillText, activeTab === 'trains' && styles.tabPillTextActive]}>
@@ -167,6 +455,7 @@ export default function ModernHomeScreen() {
 
       {/* Content */}
       <Animated.ScrollView 
+        key={activeTab} // Force re-render on tab change
         style={[styles.content, {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }]
@@ -179,218 +468,30 @@ export default function ModernHomeScreen() {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Available Rides</Text>
-                <Text style={styles.sectionSubtitle}>{rides.length} rides nearby</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {loadingRides ? 'Loading...' : `${rides.length} rides nearby`}
+                </Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
-            {rides.map((ride, index) => (
-              <TouchableOpacity 
-                key={ride.id} 
-                style={[styles.modernCard, styles.cardElevated]}
-                activeOpacity={0.9}
-                delayPressIn={50}
-              >
-                {/* Top Section */}
-                <View style={styles.cardTopSection}>
-                  <View style={styles.driverRow}>
-                    <View style={styles.avatarContainer}>
-                      <View style={[styles.avatar, styles.avatarGradient]}>
-                        <Text style={styles.avatarText}>{(ride.driverName || 'U')[0].toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.driverDetails}>
-                      <Text style={styles.driverName}>{ride.driverName}</Text>
-                      <View style={styles.metaRow}>
-                        <View style={styles.ratingPill}>
-                          <Text style={styles.ratingStar}>★</Text>
-                          <Text style={styles.ratingText}>{driverProfiles[ride.driverId]?.rating || '5.0'}</Text>
-                        </View>
-                        <View style={styles.carInfo}>
-                          <Text style={styles.carText}>{driverProfiles[ride.driverId]?.department || ''}</Text>
-                        </View>
-                        <Text style={styles.tripCount}>{driverProfiles[ride.driverId]?.year || ''}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.priceSection}>
-                    <Text style={styles.priceAmount}>₹{ride.cost}</Text>
-                    <Text style={styles.priceLabel}>per seat</Text>
-                  </View>
-                </View>
-
-                {/* Simple Route Section */}
-                <View style={styles.routeSection}>
-                  <View style={styles.timeline}>
-                    <View style={styles.timelineItem}>
-                      <View style={styles.timelineDot} />
-                    </View>
-                    <View style={styles.timelineLine} />
-                    <View style={styles.timelineItem}>
-                      <View style={styles.locationIconContainer}>
-                        <Text style={styles.locationIcon}>📍</Text>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.routeInfo}>
-                    <View style={styles.locationRow}>
-                      <View style={styles.locationContent}>
-                        <Text style={styles.locationText}>{ride.from}</Text>
-                      </View>
-                      <Text style={styles.timeText}>{(ride.time || '').split(' - ')[0]}</Text>
-                    </View>
-                    
-                    <View style={styles.locationRow}>
-                      <View style={styles.locationContent}>
-                        <Text style={styles.locationText}>{ride.to}</Text>
-                      </View>
-                      <Text style={styles.timeText}>{(ride.time || '').split(' - ')[1]}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Bottom Section */}
-                <View style={styles.cardBottomSection}>
-                  <View style={styles.leftMeta}>
-                    <View style={styles.seatsContainer}>
-                      <View style={styles.seatsIndicator}>
-                        {[...Array(3)].map((_, i) => (
-                          <View 
-                            key={i} 
-                            style={[
-                              styles.seatDot, 
-                              i < (ride.availableSeats || 0) ? styles.seatAvailable : styles.seatUnavailable
-                            ]} 
-                          />
-                        ))}
-                      </View>
-                      <Text style={styles.seatsText}>{ride.availableSeats} seats left</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity 
-                      style={[styles.secondaryButton]}
-                      activeOpacity={0.8}
-                      onPress={() => handleChatWithDriver(ride)}
-                    >
-                      <Text style={styles.secondaryButtonText}>Chat</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.primaryButton, styles.buttonElevated]}
-                      activeOpacity={0.8}
-                      onPress={() => handleRequestRide(ride)}
-                    >
-                      <Text style={styles.primaryButtonText}>Request</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {renderRidesContent()}
           </>
         ) : (
           <>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Train Connections</Text>
-                <Text style={styles.sectionSubtitle}>{trains.length} buddies available • Same route</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {loadingTrains ? 'Loading...' : `${trains.length} buddies available • Same route`}
+                </Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
-
-            {trains.map((train) => (
-              <TouchableOpacity 
-                key={train.id} 
-                style={[styles.modernCard, styles.cardElevated]}
-                activeOpacity={0.9}
-              >
-                {/* Top Section */}
-                <View style={styles.cardTopSection}>
-                  <View style={styles.driverRow}>
-                    <View style={styles.avatarContainer}>
-                      <View style={[styles.avatar, styles.avatarGradientSecondary]}>
-                        <Text style={styles.avatarText}>{(train.userName || 'U')[0].toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.driverDetails}>
-                      <Text style={styles.driverName}>{train.userName}</Text>
-                      <View style={styles.metaRow}>
-                        <Text style={styles.tripCount}>{train.passengersCount} {train.passengersCount === 1 ? 'traveler' : 'travelers'}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Train Badge */}
-                <View style={styles.trainBadgeContainer}>
-                  <View style={styles.trainBadge}>
-                    <View style={styles.trainIcon}>
-                      <Text style={styles.trainEmoji}>🚆</Text>
-                    </View>
-                    <View style={styles.trainDetails}>
-                      <Text style={styles.trainName}>{train.trainName}</Text>
-                      <View style={styles.trainMeta}>
-                        <Text style={styles.trainRoute}>{train.fromStation} → {train.toStation}</Text>
-                        <View style={styles.coachBadge}>
-                          <Text style={styles.coachText}>General</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Simple Route Section */}
-                <View style={styles.routeSection}>
-                  <View style={styles.timeline}>
-                    <View style={styles.timelineItem}>
-                      <View style={styles.timelineDot} />
-                    </View>
-                    <View style={styles.timelineLine} />
-                    <View style={styles.timelineItem}>
-                      <View style={styles.locationIconContainer}>
-                        <Text style={styles.locationIcon}>📍</Text>
-                      </View>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.routeInfo}>
-                    <View style={styles.locationRow}>
-                      <View style={styles.locationContent}>
-                        <Text style={styles.locationText}>{train.arrivalStation} Station</Text>
-                      </View>
-                      <Text style={styles.timeText}>{train.arrivalTime}</Text>
-                    </View>
-                    
-                    <View style={styles.locationRow}>
-                      <View style={styles.locationContent}>
-                        <Text style={styles.locationText}>Traveling together</Text>
-                      </View>
-                      <Text style={styles.timeText}>{train.arrivalTime}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Bottom Section */}
-                <View style={styles.cardBottomSection}>
-                  <View style={styles.leftMeta}>
-                    <Text style={styles.trainMetaText}>🎫 Local train • 🤝 Travel together</Text>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={[styles.primaryButton, styles.buttonElevated, styles.connectButton]}
-                    activeOpacity={0.8}
-                    onPress={() => handleConnectTrain(train)}
-                  >
-                    <Text style={styles.primaryButtonText}>Connect</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {renderTrainsContent()}
           </>
         )}
 
@@ -916,6 +1017,70 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#3730A3',
     fontWeight: '700',
+  },
+  
+  // Loading and Empty States
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    marginBottom: 16,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  emptyState: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F1F5F9',
+    borderStyle: 'dashed',
+    marginBottom: 16,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyEmoji: {
+    fontSize: 40,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: '600',
   },
   
   bottomSpace: {

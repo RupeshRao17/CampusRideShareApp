@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Switch, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert, Modal} from 'react-native';
 import { createRide, createTrainPost } from '@services/data';
 import { useAuthState } from '@lib/firebase';
@@ -85,40 +85,6 @@ const CalendarPickerModal = ({
               </View>
             </View>
 
-            <View style={pickerStyles.quickSelectSection}>
-              <Text style={pickerStyles.sectionTitle}>Quick Select</Text>
-              <View style={pickerStyles.quickSelectContainer}>
-                {['Today', 'Tomorrow', 'Next Week'].map((label) => {
-                  const today = new Date();
-                  let date = new Date(today);
-                  
-                  if (label === 'Tomorrow') date.setDate(today.getDate() + 1);
-                  else if (label === 'Next Week') date.setDate(today.getDate() + 7);
-                  
-                  const isSelected = date.getDate() === selectedDate.getDate() &&
-                    date.getMonth() === selectedDate.getMonth() &&
-                    date.getFullYear() === selectedDate.getFullYear();
-                  
-                  return (
-                    <TouchableOpacity
-                      key={label}
-                      style={[
-                        pickerStyles.quickSelectButton,
-                        isSelected && pickerStyles.quickSelectButtonActive
-                      ]}
-                      onPress={() => setSelectedDate(date)}
-                    >
-                      <Text style={[
-                        pickerStyles.quickSelectText,
-                        isSelected && pickerStyles.quickSelectTextActive
-                      ]}>
-                        {label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
 
             <View style={pickerStyles.calendarSection}>
               <View style={pickerStyles.calendarHeader}>
@@ -223,17 +189,11 @@ const CalendarPickerModal = ({
   );
 };
 
-const TimePickerModal = ({ 
-  visible, 
-  initialTime,
-  title,
-  onConfirm, 
-  onCancel 
-}: { 
-  visible: boolean; 
+const TimePickerModal = ({ visible, initialTime, title, onConfirm, onCancel }: {
+  visible: boolean;
   initialTime: Date;
   title: string;
-  onConfirm: (time: string) => void; 
+  onConfirm: (time: string) => void;
   onCancel: () => void;
 }) => {
   const [selectedHour, setSelectedHour] = useState(initialTime.getHours() % 12 || 12);
@@ -243,6 +203,114 @@ const TimePickerModal = ({
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = Array.from({ length: 60 }, (_, i) => i);
 
+  // Refs for scroll views
+  const hourScrollRef = useRef<ScrollView>(null);
+  const minuteScrollRef = useRef<ScrollView>(null);
+  const periodScrollRef = useRef<ScrollView>(null);
+
+  // Scroll end timers
+  const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-select when scrolling stops
+  const handleHourScroll = useCallback(({ nativeEvent }: { nativeEvent: any }) => {
+    const offsetY = nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / 48);
+    const hour = hours[Math.max(0, Math.min(index, hours.length - 1))];
+
+    if (scrollEndTimer.current) {
+      clearTimeout(scrollEndTimer.current);
+    }
+
+    scrollEndTimer.current = setTimeout(() => {
+      if (hour !== selectedHour) {
+        setSelectedHour(hour);
+      }
+    }, 100);
+  }, [selectedHour]);
+
+  const handleMinuteScroll = useCallback(({ nativeEvent }: { nativeEvent: any }) => {
+    const offsetY = nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / 48);
+    const minute = minutes[Math.max(0, Math.min(index, minutes.length - 1))];
+
+    if (scrollEndTimer.current) {
+      clearTimeout(scrollEndTimer.current);
+    }
+
+    scrollEndTimer.current = setTimeout(() => {
+      if (minute !== selectedMinute) {
+        setSelectedMinute(minute);
+      }
+    }, 100);
+  }, [selectedMinute]);
+
+  // removed seconds scroll handler
+
+  const handlePeriodScroll = useCallback(({ nativeEvent }: { nativeEvent: any }) => {
+    const offsetY = nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / 48);
+    const period = ['AM', 'PM'][Math.max(0, Math.min(index, 1))];
+    const isAMValue = period === 'AM';
+
+    if (scrollEndTimer.current) {
+      clearTimeout(scrollEndTimer.current);
+    }
+
+    scrollEndTimer.current = setTimeout(() => {
+      if (isAMValue !== isAM) {
+        setIsAM(isAMValue);
+      }
+    }, 100);
+  }, [isAM]);
+
+  // Handle scroll end to snap to position
+  const handleScrollEndDrag = useCallback((ref: any, itemsArray: any[], setValue: (val: any) => void) => {
+    return ({ nativeEvent }: any) => {
+      const offsetY = nativeEvent.contentOffset.y;
+      const index = Math.round(offsetY / 48);
+      const snapIndex = Math.max(0, Math.min(index, itemsArray.length - 1));
+      const snapOffset = snapIndex * 48;
+      
+      if (ref.current) {
+        ref.current.scrollTo({ y: snapOffset, animated: true });
+      }
+      setValue(itemsArray[snapIndex]);
+    };
+  }, []);
+
+  // Clean up timers
+  useEffect(() => {
+    return () => {
+      if (scrollEndTimer.current) {
+        clearTimeout(scrollEndTimer.current);
+      }
+    };
+  }, []);
+
+  // Scroll to selected item when component mounts
+  useEffect(() => {
+    if (visible) {
+      setTimeout(() => {
+        if (hourScrollRef.current) {
+          const index = hours.indexOf(selectedHour);
+          if (index !== -1) {
+            hourScrollRef.current.scrollTo({ y: index * 48, animated: false });
+          }
+        }
+        if (minuteScrollRef.current) {
+          const index = minutes.indexOf(selectedMinute);
+          if (index !== -1) {
+            minuteScrollRef.current.scrollTo({ y: index * 48, animated: false });
+          }
+        }
+        if (periodScrollRef.current) {
+          const index = isAM ? 0 : 1;
+          periodScrollRef.current.scrollTo({ y: index * 48, animated: false });
+        }
+      }, 100);
+    }
+  }, [visible]);
+
   const handleConfirm = () => {
     const hour24 = isAM ? (selectedHour === 12 ? 0 : selectedHour) : (selectedHour === 12 ? 12 : selectedHour + 12);
     const timeString = `${hour24.toString().padStart(2, '0')}:${selectedMinute.toString().padStart(2, '0')}`;
@@ -250,25 +318,16 @@ const TimePickerModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-    >
+    <Modal visible={visible} transparent animationType="fade">
       <View style={pickerStyles.modalOverlay}>
         <View style={pickerStyles.modalContent}>
-          <View style={pickerStyles.modalHeader}>
-            <View style={pickerStyles.headerBackground} />
-            <Text style={pickerStyles.pickerTitle}>Select {title}</Text>
-            <Text style={pickerStyles.pickerSubtitle}>Choose your preferred time</Text>
-          </View>
+          <ScrollView style={pickerStyles.scrollView} contentContainerStyle={pickerStyles.scrollViewContent}>
+            <View style={pickerStyles.modalHeader}>
+              <View style={pickerStyles.headerBackground} />
+              <Text style={pickerStyles.pickerTitle}>Select {title}</Text>
+              <Text style={pickerStyles.pickerSubtitle}>Choose your preferred time</Text>
+            </View>
 
-          <ScrollView 
-            style={pickerStyles.scrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={pickerStyles.scrollViewContent}
-          >
             <View style={pickerStyles.selectedDisplayCard}>
               <View style={pickerStyles.selectedDisplayContent}>
                 <Text style={pickerStyles.selectedLabel}>SELECTED TIME</Text>
@@ -280,14 +339,20 @@ const TimePickerModal = ({
 
             <View style={pickerStyles.timePickerContainer}>
               <View style={pickerStyles.timeSelectionBar} />
-              
               <View style={pickerStyles.timeColumnsContainer}>
                 <View style={pickerStyles.timeColumn}>
                   <Text style={pickerStyles.timeColumnLabel}>Hour</Text>
-                  <ScrollView 
+                  <ScrollView
+                    ref={hourScrollRef}
                     style={pickerStyles.timeColumnScroll}
-                    showsVerticalScrollIndicator={false}
                     contentContainerStyle={pickerStyles.timeColumnContent}
+                    showsVerticalScrollIndicator={false}
+                    snapToInterval={48}
+                    decelerationRate="fast"
+                    onScroll={handleHourScroll}
+                    onMomentumScrollEnd={handleScrollEndDrag(hourScrollRef, hours, setSelectedHour)}
+                    scrollEventThrottle={16}
+                    nestedScrollEnabled={true}
                   >
                     {hours.map(hour => (
                       <TouchableOpacity
@@ -296,7 +361,11 @@ const TimePickerModal = ({
                           pickerStyles.timeOption,
                           selectedHour === hour && pickerStyles.timeOptionSelected
                         ]}
-                        onPress={() => setSelectedHour(hour)}
+                        onPress={() => {
+                          setSelectedHour(hour);
+                          const index = hours.indexOf(hour);
+                          hourScrollRef.current?.scrollTo({ y: index * 48, animated: true });
+                        }}
                       >
                         <Text style={[
                           pickerStyles.timeOptionText,
@@ -311,10 +380,17 @@ const TimePickerModal = ({
 
                 <View style={pickerStyles.timeColumn}>
                   <Text style={pickerStyles.timeColumnLabel}>Minute</Text>
-                  <ScrollView 
+                  <ScrollView
+                    ref={minuteScrollRef}
                     style={pickerStyles.timeColumnScroll}
-                    showsVerticalScrollIndicator={false}
                     contentContainerStyle={pickerStyles.timeColumnContent}
+                    showsVerticalScrollIndicator={false}
+                    snapToInterval={48}
+                    decelerationRate="fast"
+                    onScroll={handleMinuteScroll}
+                    onMomentumScrollEnd={handleScrollEndDrag(minuteScrollRef, minutes, setSelectedMinute)}
+                    scrollEventThrottle={16}
+                    nestedScrollEnabled={true}
                   >
                     {minutes.map(minute => (
                       <TouchableOpacity
@@ -323,7 +399,11 @@ const TimePickerModal = ({
                           pickerStyles.timeOption,
                           selectedMinute === minute && pickerStyles.timeOptionSelected
                         ]}
-                        onPress={() => setSelectedMinute(minute)}
+                        onPress={() => {
+                          setSelectedMinute(minute);
+                          const index = minutes.indexOf(minute);
+                          minuteScrollRef.current?.scrollTo({ y: index * 48, animated: true });
+                        }}
                       >
                         <Text style={[
                           pickerStyles.timeOptionText,
@@ -336,12 +416,21 @@ const TimePickerModal = ({
                   </ScrollView>
                 </View>
 
+                {/* seconds column removed */}
+
                 <View style={pickerStyles.timeColumn}>
                   <Text style={pickerStyles.timeColumnLabel}>Period</Text>
-                  <ScrollView 
+                  <ScrollView
+                    ref={periodScrollRef}
                     style={pickerStyles.timeColumnScroll}
-                    showsVerticalScrollIndicator={false}
                     contentContainerStyle={pickerStyles.timeColumnContent}
+                    showsVerticalScrollIndicator={false}
+                    snapToInterval={48}
+                    decelerationRate="fast"
+                    onScroll={handlePeriodScroll}
+                    onMomentumScrollEnd={handleScrollEndDrag(periodScrollRef, ['AM', 'PM'], (val) => setIsAM(val === 'AM'))}
+                    scrollEventThrottle={16}
+                    nestedScrollEnabled={true}
                   >
                     {['AM', 'PM'].map(period => {
                       const isSelected = (isAM && period === 'AM') || (!isAM && period === 'PM');
@@ -352,7 +441,11 @@ const TimePickerModal = ({
                             pickerStyles.timeOption,
                             isSelected && pickerStyles.timeOptionSelected
                           ]}
-                          onPress={() => setIsAM(period === 'AM')}
+                          onPress={() => {
+                            setIsAM(period === 'AM');
+                            const index = period === 'AM' ? 0 : 1;
+                            periodScrollRef.current?.scrollTo({ y: index * 48, animated: true });
+                          }}
                         >
                           <Text style={[
                             pickerStyles.timeOptionText,
@@ -370,7 +463,7 @@ const TimePickerModal = ({
 
             <View style={pickerStyles.commonTimesSection}>
               <Text style={pickerStyles.sectionTitle}>Common Times</Text>
-              <ScrollView 
+              <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={pickerStyles.commonTimesScroll}
@@ -381,7 +474,7 @@ const TimePickerModal = ({
                   const isSelected = selectedHour === (hour % 12 || 12) && selectedMinute === minute;
                   const period = hour < 12 ? 'AM' : 'PM';
                   const displayHour = hour % 12 || 12;
-                  
+
                   return (
                     <TouchableOpacity
                       key={time}
@@ -409,15 +502,14 @@ const TimePickerModal = ({
           </ScrollView>
 
           <View style={pickerStyles.actionButtons}>
-            <TouchableOpacity 
-              style={[pickerStyles.actionButton, pickerStyles.cancelButton]} 
+            <TouchableOpacity
+              style={[pickerStyles.actionButton, pickerStyles.cancelButton]}
               onPress={onCancel}
             >
               <Text style={pickerStyles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[pickerStyles.actionButton, pickerStyles.confirmButton]} 
+            <TouchableOpacity
+              style={[pickerStyles.actionButton, pickerStyles.confirmButton]}
               onPress={handleConfirm}
             >
               <Text style={pickerStyles.confirmButtonText}>Select Time</Text>
@@ -432,11 +524,10 @@ const TimePickerModal = ({
 const formatDateDisplay = (date: Date) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-  
+
   return {
     short: `${day}/${month}/${year}`,
     long: `${days[date.getDay()]}, ${months[date.getMonth()]} ${day}, ${year}`
@@ -445,17 +536,11 @@ const formatDateDisplay = (date: Date) => {
 
 const formatTimeDisplay = (time: string) => {
   if (!time) return 'Select Time';
-  
   const [hours, minutes] = time.split(':').map(Number);
   const date = new Date();
   date.setHours(hours);
   date.setMinutes(minutes);
-  
-  return date.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: true 
-  });
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 const RouteSection = ({ from, setFrom, to, setTo, icon = '📍', title = 'Route Details' }: any) => (
@@ -466,27 +551,25 @@ const RouteSection = ({ from, setFrom, to, setTo, icon = '📍', title = 'Route 
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
-
     <View style={styles.inputGroup}>
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>From Location *</Text>
         <TextInput
-          placeholder="e.g., SIES College, Nerul"
-          placeholderTextColor="#94A3B8"
+          style={styles.textInput}
+          placeholder="Enter pickup location"
           value={from}
           onChangeText={setFrom}
-          style={styles.textInput}
+          placeholderTextColor="#94A3B8"
         />
       </View>
-
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>To Destination *</Text>
         <TextInput
-          placeholder="e.g., Vashi Station"
-          placeholderTextColor="#94A3B8"
+          style={styles.textInput}
+          placeholder="Enter drop-off location"
           value={to}
           onChangeText={setTo}
-          style={styles.textInput}
+          placeholderTextColor="#94A3B8"
         />
       </View>
     </View>
@@ -496,11 +579,7 @@ const RouteSection = ({ from, setFrom, to, setTo, icon = '📍', title = 'Route 
 const TimeField = ({ label, value, onPress, placeholder }: any) => (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>{label} *</Text>
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onPress}
-      style={[styles.textInput, styles.pickerInput]}
-    >
+    <TouchableOpacity style={[styles.textInput, styles.pickerInput]} onPress={onPress}>
       <Text style={value ? styles.pickerValue : styles.pickerPlaceholder}>
         {value ? formatTimeDisplay(value) : placeholder}
       </Text>
@@ -511,11 +590,7 @@ const TimeField = ({ label, value, onPress, placeholder }: any) => (
 const DateField = ({ value, dateObj, onPress }: any) => (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>Date *</Text>
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onPress}
-      style={[styles.textInput, styles.pickerInput]}
-    >
+    <TouchableOpacity style={[styles.textInput, styles.pickerInput]} onPress={onPress}>
       <Text style={value ? styles.pickerValue : styles.pickerPlaceholder}>
         {value ? formatDateDisplay(dateObj).long : 'Select Date'}
       </Text>
@@ -536,13 +611,9 @@ const CounterInput = ({ label, value, setValue, max = 10 }: any) => (
       >
         <Text style={styles.seatButtonText}>-</Text>
       </TouchableOpacity>
-      <TextInput
-        value={value}
-        onChangeText={setValue}
-        keyboardType="number-pad"
-        style={styles.seatsInput}
-        maxLength={2}
-      />
+      <View style={styles.seatsInputWrapper}>
+        <Text style={styles.seatsInputText}>{value}</Text>
+      </View>
       <TouchableOpacity
         style={styles.seatButton}
         onPress={() => {
@@ -564,7 +635,6 @@ const PreferenceSection = ({ value, onValueChange, title, description }: any) =>
       </View>
       <Text style={styles.sectionTitle}>Preferences</Text>
     </View>
-
     <View style={styles.preferenceCard}>
       <View style={styles.preferenceContent}>
         <View style={styles.preferenceText}>
@@ -574,9 +644,8 @@ const PreferenceSection = ({ value, onValueChange, title, description }: any) =>
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: '#E2E8F0', true: '#3B82F6' }}
-          thumbColor="#FFFFFF"
-          ios_backgroundColor="#E2E8F0"
+          trackColor={{ false: '#E2E8F0', true: '#93C5FD' }}
+          thumbColor={value ? '#3B82F6' : '#CBD5E1'}
         />
       </View>
     </View>
@@ -594,9 +663,9 @@ export default function PostRideScreen() {
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [reachTime, setReachTime] = useState('');
-  const [dateObj, setDateObj] = useState<Date>(new Date());
-  const [startObj, setStartObj] = useState<Date>(new Date());
-  const [reachObj, setReachObj] = useState<Date>(new Date());
+  const [dateObj, setDateObj] = useState(new Date());
+  const [startObj, setStartObj] = useState(new Date());
+  const [reachObj, setReachObj] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showReachPicker, setShowReachPicker] = useState(false);
@@ -610,7 +679,7 @@ export default function PostRideScreen() {
   const [toStation, setToStation] = useState('');
   const [arrivalStation, setArrivalStation] = useState('');
   const [arrivalTime, setArrivalTime] = useState('');
-  const [arrivalObj, setArrivalObj] = useState<Date>(new Date());
+  const [arrivalObj, setArrivalObj] = useState(new Date());
   const [passengersCount, setPassengersCount] = useState('1');
   const [trainSameGenderOnly, setTrainSameGenderOnly] = useState(false);
 
@@ -743,26 +812,19 @@ export default function PostRideScreen() {
     }
   };
 
-  
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Text style={styles.title}>
               {activeTab === 'ride' ? 'Post a Ride' : 'Post Train Connection'}
             </Text>
             <Text style={styles.subtitle}>
-              {activeTab === 'ride'
-                ? 'Share your journey with campus community'
-                : 'Connect with fellow train travelers'}
+              {activeTab === 'ride' ? 'Share your journey with campus community' : 'Connect with fellow train travelers'}
             </Text>
           </View>
         </View>
@@ -778,7 +840,6 @@ export default function PostRideScreen() {
               </Text>
             </View>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.tab, activeTab === 'train' && styles.activeTab]}
             onPress={() => setActiveTab('train')}
@@ -794,7 +855,12 @@ export default function PostRideScreen() {
         <View style={styles.formContainer}>
           {activeTab === 'ride' ? (
             <>
-              <RouteSection from={from} setFrom={setFrom} to={to} setTo={setTo} />
+              <RouteSection
+                from={from}
+                setFrom={setFrom}
+                to={to}
+                setTo={setTo}
+              />
 
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -803,24 +869,24 @@ export default function PostRideScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Schedule</Text>
                 </View>
-
                 <View style={styles.inputGroup}>
-                  <DateField value={date} dateObj={dateObj} onPress={() => setShowDatePicker(true)} />
-                  
-                  <View style={styles.row}>
-                    <TimeField
-                      label="Start Time"
-                      value={startTime}
-                      onPress={() => setShowStartPicker(true)}
-                      placeholder="Select Start Time"
-                    />
-                    <TimeField
-                      label="Reach Time"
-                      value={reachTime}
-                      onPress={() => setShowReachPicker(true)}
-                      placeholder="Select Reach Time"
-                    />
-                  </View>
+                  <DateField
+                    value={date}
+                    dateObj={dateObj}
+                    onPress={() => setShowDatePicker(true)}
+                  />
+                  <TimeField
+                    label="Start Time"
+                    value={startTime}
+                    onPress={() => setShowStartPicker(true)}
+                    placeholder="Select Start Time"
+                  />
+                  <TimeField
+                    label="Reach Time"
+                    value={reachTime}
+                    onPress={() => setShowReachPicker(true)}
+                    placeholder="Select Reach Time"
+                  />
                 </View>
               </View>
 
@@ -831,24 +897,24 @@ export default function PostRideScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Ride Details</Text>
                 </View>
-
                 <View style={styles.inputGroup}>
-                  <View style={styles.row}>
-                    <CounterInput label="Seats Available" value={seats} setValue={setSeats} />
-                    
-                    <View style={[styles.inputContainer, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>Cost Per Person *</Text>
-                      <View style={styles.costContainer}>
-                        <Text style={styles.currencySymbol}>₹</Text>
-                        <TextInput
-                          placeholder="0"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="number-pad"
-                          value={cost}
-                          onChangeText={setCost}
-                          style={[styles.textInput, styles.costInput]}
-                        />
-                      </View>
+                  <CounterInput
+                    label="Available Seats"
+                    value={seats}
+                    setValue={setSeats}
+                  />
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Cost Per Person *</Text>
+                    <View style={styles.costContainer}>
+                      <Text style={styles.currencySymbol}>₹</Text>
+                      <TextInput
+                        style={[styles.textInput, styles.costInput]}
+                        placeholder="Enter amount"
+                        value={cost}
+                        onChangeText={setCost}
+                        keyboardType="numeric"
+                        placeholderTextColor="#94A3B8"
+                      />
                     </View>
                   </View>
                 </View>
@@ -858,7 +924,7 @@ export default function PostRideScreen() {
                 value={sameGenderOnly}
                 onValueChange={setSameGenderOnly}
                 title="Same Gender Only"
-                description="Restrict to same gender passengers for comfort and safety"
+                description="Only accept passengers of your gender"
               />
 
               <TouchableOpacity
@@ -887,41 +953,36 @@ export default function PostRideScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Train Information</Text>
                 </View>
-
                 <View style={styles.inputGroup}>
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Train Name/Line *</Text>
                     <TextInput
-                      placeholder="e.g., Harbour Line, Trans-Harbour Line"
-                      placeholderTextColor="#94A3B8"
+                      style={styles.textInput}
+                      placeholder="Enter train name or number"
                       value={trainName}
                       onChangeText={setTrainName}
-                      style={styles.textInput}
+                      placeholderTextColor="#94A3B8"
                     />
                   </View>
-
-                  <View style={styles.row}>
-                    <View style={[styles.inputContainer, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>From Station *</Text>
-                      <TextInput
-                        placeholder="e.g., CST"
-                        placeholderTextColor="#94A3B8"
-                        value={fromStation}
-                        onChangeText={setFromStation}
-                        style={styles.textInput}
-                      />
-                    </View>
-
-                    <View style={[styles.inputContainer, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>To Station *</Text>
-                      <TextInput
-                        placeholder="e.g., Panvel"
-                        placeholderTextColor="#94A3B8"
-                        value={toStation}
-                        onChangeText={setToStation}
-                        style={styles.textInput}
-                      />
-                    </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>From Station *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter departure station"
+                      value={fromStation}
+                      onChangeText={setFromStation}
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>To Station *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter destination station"
+                      value={toStation}
+                      onChangeText={setToStation}
+                      placeholderTextColor="#94A3B8"
+                    />
                   </View>
                 </View>
               </View>
@@ -933,30 +994,27 @@ export default function PostRideScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Arrival Details</Text>
                 </View>
-
                 <View style={styles.inputGroup}>
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Boarding Station *</Text>
                     <TextInput
-                      placeholder="e.g., Nerul Station"
-                      placeholderTextColor="#94A3B8"
+                      style={styles.textInput}
+                      placeholder="Enter boarding station"
                       value={arrivalStation}
                       onChangeText={setArrivalStation}
-                      style={styles.textInput}
+                      placeholderTextColor="#94A3B8"
                     />
                   </View>
-
                   <TimeField
                     label="Arrival Time"
                     value={arrivalTime}
                     onPress={() => setShowArrivalPicker(true)}
                     placeholder="Select Arrival Time"
                   />
-
-                  <CounterInput 
-                    label="Number of People" 
-                    value={passengersCount} 
-                    setValue={setPassengersCount} 
+                  <CounterInput
+                    label="Passengers"
+                    value={passengersCount}
+                    setValue={setPassengersCount}
                   />
                 </View>
               </View>
@@ -965,7 +1023,7 @@ export default function PostRideScreen() {
                 value={trainSameGenderOnly}
                 onValueChange={setTrainSameGenderOnly}
                 title="Same Gender Only"
-                description="Restrict to same gender connections for comfort and safety"
+                description="Only connect with same gender travelers"
               />
 
               <TouchableOpacity
@@ -1217,6 +1275,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: '#F1F5F9',
+    height: 50,
   },
   seatButton: {
     width: 48,
@@ -1229,12 +1288,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
+  seatsInputWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seatsInputText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
   seatsInput: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontSize: 16,
+    color: '#1E293B',
     paddingVertical: 14,
   },
   preferenceCard: {
@@ -1397,50 +1465,12 @@ const pickerStyles = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
-  quickSelectSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: 12,
     marginLeft: 4,
-  },
-  quickSelectContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  quickSelectScroll: {
-    height: 60,
-  },
-  quickSelectScrollContent: {
-    paddingHorizontal: 10,
-    alignItems: 'center',
-  },
-  quickSelectButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    marginHorizontal: 5,
-    minWidth: 100,
-  },
-  quickSelectButtonActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  quickSelectText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  quickSelectTextActive: {
-    color: '#FFFFFF',
   },
   calendarSection: {
     backgroundColor: '#F8FAFC',
@@ -1569,7 +1599,7 @@ const pickerStyles = StyleSheet.create({
   timeColumn: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   timeColumnLabel: {
     fontSize: 12,
@@ -1585,6 +1615,7 @@ const pickerStyles = StyleSheet.create({
   timeColumnContent: {
     alignItems: 'center',
     paddingVertical: 70,
+    paddingBottom: 100,
   },
   timeOption: {
     width: 56,
@@ -1592,7 +1623,6 @@ const pickerStyles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 2,
   },
   timeOptionSelected: {},
   timeOptionText: {
