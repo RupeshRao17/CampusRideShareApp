@@ -4,19 +4,21 @@
     "slug": "campus-rideshare",
     "scheme": "campusrideshare",
     "version": "0.1.0",
-    
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "orientation": "portrait",
-    
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "in.sies.campusrideshare"
+      "package": "in.sies.campusrideshare",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -26,7 +28,14 @@
       "supabase": {
         "url": "https://oluccrwhokjfpckujcvu.supabase.co",
         "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sdWNjcndob2tqZnBja3VqY3Z1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MzcxMjYsImV4cCI6MjA4MDUxMzEyNn0.GgPtsl_m62WHneVtXBax3cdLFYCZZkUjMmWfu-IE5kI"
+      },
+      "eas": {
+        "projectId": "9633b640-b71c-4632-ae7b-9e7ad313df7a"
       }
-    }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-font"
+    ]
   }
 }

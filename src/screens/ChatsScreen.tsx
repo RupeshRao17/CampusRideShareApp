@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, TextInput } from 'react-native';
 import { useAuthState } from '@lib/firebase';
 import { useNavigation } from '@react-navigation/native';
 import { listenUserChats } from '@services/chat';
@@ -10,6 +10,7 @@ export default function ChatsScreen() {
   const [chats, setChats] = useState<any[]>([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     Animated.parallel([
@@ -33,7 +34,14 @@ export default function ChatsScreen() {
     return () => unsub();
   }, [profile]);
 
-  const displayChats = chats;
+  const displayChats = (searchText.trim()
+    ? chats.filter((c) => {
+        const q = searchText.trim().toLowerCase();
+        const name = String(c.userName || '').toLowerCase();
+        const last = String(c.lastMessage || '').toLowerCase();
+        return name.includes(q) || last.includes(q);
+      })
+    : chats);
 
   const handleChatPress = (chat: any) => {
     (navigation as any).navigate('ChatRoom', {
@@ -62,16 +70,21 @@ export default function ChatsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
-          <TouchableOpacity style={styles.searchBox}>
+          <View style={styles.searchBox}>
             <View style={styles.searchIcon}>
               <Text style={styles.searchIconText}>🔍</Text>
             </View>
-            <Text style={styles.searchPlaceholder}>Search conversations...</Text>
+            <TextInput
+              placeholder="Search conversations..."
+              value={searchText}
+              onChangeText={setSearchText}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
             <View style={styles.searchAction}>
               <Text style={styles.searchActionText}>Search</Text>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -258,6 +271,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#2563EB',
     fontWeight: '700',
+  },
+  searchInput: {
+    fontSize: 17,
+    color: '#0F172A',
+    fontWeight: '500',
+    flex: 1,
   },
   
   // Content

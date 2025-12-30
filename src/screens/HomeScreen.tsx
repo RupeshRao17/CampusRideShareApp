@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { useAuthState, supabase } from '@lib/firebase';
 import { getActiveRides, getActiveTrainPosts, requestRide } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
@@ -14,6 +14,7 @@ export default function ModernHomeScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('rides');
   const [searchFocused, setSearchFocused] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [searchText, setSearchText] = useState('');
   
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -136,6 +137,15 @@ export default function ModernHomeScreen() {
   };
 
   const renderRidesContent = () => {
+    const normalizedQuery = searchText.trim().toLowerCase();
+    const filteredRides = normalizedQuery
+      ? rides.filter((ride) => {
+          const from = String(ride.from || '').toLowerCase();
+          const to = String(ride.to || '').toLowerCase();
+          const driver = String(ride.driverName || '').toLowerCase();
+          return from.includes(normalizedQuery) || to.includes(normalizedQuery) || driver.includes(normalizedQuery);
+        })
+      : rides;
     if (loadingRides) {
       return (
         <View style={styles.loadingContainer}>
@@ -153,21 +163,21 @@ export default function ModernHomeScreen() {
       );
     }
     
-    if (rides.length === 0) {
+    if (filteredRides.length === 0) {
       return (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Text style={styles.emptyEmoji}>🚗</Text>
           </View>
-          <Text style={styles.emptyTitle}>No rides available</Text>
+          <Text style={styles.emptyTitle}>No rides match your search</Text>
           <Text style={styles.emptySubtitle}>
-            Check back later or post your own ride
+            Try a different query or clear search
           </Text>
         </View>
       );
     }
     
-    return rides.map((ride) => (
+    return filteredRides.map((ride) => (
       <TouchableOpacity 
         key={ride.id} 
         style={[styles.modernCard, styles.cardElevated]}
@@ -275,6 +285,23 @@ export default function ModernHomeScreen() {
   };
 
   const renderTrainsContent = () => {
+    const normalizedQuery = searchText.trim().toLowerCase();
+    const filteredTrains = normalizedQuery
+      ? trains.filter((train) => {
+          const name = String(train.trainName || '').toLowerCase();
+          const fromS = String(train.fromStation || '').toLowerCase();
+          const toS = String(train.toStation || '').toLowerCase();
+          const arrival = String(train.arrivalStation || '').toLowerCase();
+          const userName = String(train.userName || '').toLowerCase();
+          return (
+            name.includes(normalizedQuery) ||
+            fromS.includes(normalizedQuery) ||
+            toS.includes(normalizedQuery) ||
+            arrival.includes(normalizedQuery) ||
+            userName.includes(normalizedQuery)
+          );
+        })
+      : trains;
     if (loadingTrains) {
       return (
         <View style={styles.loadingContainer}>
@@ -284,21 +311,21 @@ export default function ModernHomeScreen() {
       );
     }
     
-    if (trains.length === 0) {
+    if (filteredTrains.length === 0) {
       return (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Text style={styles.emptyEmoji}>🚆</Text>
           </View>
-          <Text style={styles.emptyTitle}>No train buddies available</Text>
+          <Text style={styles.emptyTitle}>No train buddies match your search</Text>
           <Text style={styles.emptySubtitle}>
-            Be the first to post your train journey
+            Try a different query or clear search
           </Text>
         </View>
       );
     }
     
-    return trains.map((train) => (
+    return filteredTrains.map((train) => (
       <TouchableOpacity 
         key={train.id} 
         style={[styles.modernCard, styles.cardElevated]}
@@ -406,19 +433,25 @@ export default function ModernHomeScreen() {
           </View>
 
           {/* Search */}
-          <TouchableOpacity 
+          <View 
             style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}
-            onPressIn={() => setSearchFocused(true)}
-            activeOpacity={0.9}
           >
             <View style={styles.searchIcon}>
               <Text style={styles.searchIconText}>🔍</Text>
             </View>
-            <Text style={styles.searchPlaceholder}>Where to?</Text>
+            <TextInput
+              placeholder="Search"
+              value={searchText}
+              onChangeText={setSearchText}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
             <View style={styles.searchAction}>
               <Text style={styles.searchActionText}>Search</Text>
             </View>
-          </TouchableOpacity>
+          </View>
 
           {/* Tab Navigation */}
           <View style={styles.tabBar}>
@@ -469,7 +502,7 @@ export default function ModernHomeScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Available Rides</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {loadingRides ? 'Loading...' : `${rides.length} rides nearby`}
+                  {loadingRides ? 'Loading...' : `${(searchText.trim() ? rides.filter((r)=>String(r.from||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.to||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.driverName||'').toLowerCase().includes(searchText.trim().toLowerCase())):rides).length} rides nearby`}
                 </Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
@@ -484,7 +517,7 @@ export default function ModernHomeScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Train Connections</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {loadingTrains ? 'Loading...' : `${trains.length} buddies available • Same route`}
+                  {loadingTrains ? 'Loading...' : `${(searchText.trim() ? trains.filter((t)=>String(t.trainName||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.fromStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.toStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.arrivalStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.userName||'').toLowerCase().includes(searchText.trim().toLowerCase())):trains).length} buddies available • Same route`}
                 </Text>
               </View>
               <TouchableOpacity style={styles.filterButton}>
@@ -573,7 +606,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 13,
     marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -609,6 +642,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#2563EB',
     fontWeight: '700',
+  },
+  searchInput: {
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '500',
+    flex: 1,
   },
   
   // Tabs
