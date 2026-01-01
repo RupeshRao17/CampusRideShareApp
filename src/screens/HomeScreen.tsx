@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { useAuthState, supabase } from '@lib/firebase';
 import { getActiveRides, getActiveTrainPosts, requestRide } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +15,17 @@ export default function ModernHomeScreen() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [showFilter, setShowFilter] = useState(false);
+  const [minSeats, setMinSeats] = useState<number>(0);
+  const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
+  const [minRating, setMinRating] = useState<number>(0);
+  const [minTravelers, setMinTravelers] = useState<number>(0);
+  const [selectedFromLocation, setSelectedFromLocation] = useState<string>('');
+  const [selectedToLocation, setSelectedToLocation] = useState<string>('');
+  const [selectedTrainStation, setSelectedTrainStation] = useState<string>('');
+  const [showFromList, setShowFromList] = useState(false);
+  const [showToList, setShowToList] = useState(false);
+  const [showTrainStationList, setShowTrainStationList] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -138,7 +149,7 @@ export default function ModernHomeScreen() {
 
   const renderRidesContent = () => {
     const normalizedQuery = searchText.trim().toLowerCase();
-    const filteredRides = normalizedQuery
+    const filteredRidesQuery = normalizedQuery
       ? rides.filter((ride) => {
           const from = String(ride.from || '').toLowerCase();
           const to = String(ride.to || '').toLowerCase();
@@ -146,6 +157,15 @@ export default function ModernHomeScreen() {
           return from.includes(normalizedQuery) || to.includes(normalizedQuery) || driver.includes(normalizedQuery);
         })
       : rides;
+    const filteredRides = filteredRidesQuery.filter((ride) => {
+      const seatsOk = (ride.availableSeats || 0) >= (minSeats || 0);
+      const priceOk = typeof maxPrice === 'number' ? (ride.cost || 0) <= maxPrice : true;
+      const ratingVal = parseFloat(String(driverProfiles[ride.driverId]?.rating || '0')) || 0;
+      const ratingOk = ratingVal >= (minRating || 0);
+      const fromOk = selectedFromLocation ? String(ride.from || '').toLowerCase() === selectedFromLocation.toLowerCase() : true;
+      const toOk = selectedToLocation ? String(ride.to || '').toLowerCase() === selectedToLocation.toLowerCase() : true;
+      return seatsOk && priceOk && ratingOk && fromOk && toOk;
+    });
     if (loadingRides) {
       return (
         <View style={styles.loadingContainer}>
@@ -286,7 +306,7 @@ export default function ModernHomeScreen() {
 
   const renderTrainsContent = () => {
     const normalizedQuery = searchText.trim().toLowerCase();
-    const filteredTrains = normalizedQuery
+    const filteredTrainsQuery = normalizedQuery
       ? trains.filter((train) => {
           const name = String(train.trainName || '').toLowerCase();
           const fromS = String(train.fromStation || '').toLowerCase();
@@ -302,6 +322,15 @@ export default function ModernHomeScreen() {
           );
         })
       : trains;
+    const filteredTrains = filteredTrainsQuery.filter((t) => {
+      const travelersOk = (t.passengersCount || 0) >= (minTravelers || 0);
+      const stationOk = selectedTrainStation
+        ? [t.fromStation, t.toStation, t.arrivalStation]
+            .map((s: any) => String(s || '').toLowerCase())
+            .includes(selectedTrainStation.toLowerCase())
+        : true;
+      return travelersOk && stationOk;
+    });
     if (loadingTrains) {
       return (
         <View style={styles.loadingContainer}>
@@ -502,10 +531,10 @@ export default function ModernHomeScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Available Rides</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {loadingRides ? 'Loading...' : `${(searchText.trim() ? rides.filter((r)=>String(r.from||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.to||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.driverName||'').toLowerCase().includes(searchText.trim().toLowerCase())):rides).length} rides nearby`}
+                  {loadingRides ? 'Loading...' : `${(searchText.trim() ? rides.filter((r)=>String(r.from||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.to||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(r.driverName||'').toLowerCase().includes(searchText.trim().toLowerCase())):rides).filter((ride)=>{const seatsOk=(ride.availableSeats||0)>=(minSeats||0);const priceOk=typeof maxPrice==='number'?(ride.cost||0)<=maxPrice:true;const ratingVal=parseFloat(String(driverProfiles[ride.driverId]?.rating||'0'))||0;const ratingOk=ratingVal>=(minRating||0);return seatsOk&&priceOk&&ratingOk;}).length} rides nearby`}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.filterButton}>
+              <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilter(true)}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
@@ -517,10 +546,10 @@ export default function ModernHomeScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Train Connections</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {loadingTrains ? 'Loading...' : `${(searchText.trim() ? trains.filter((t)=>String(t.trainName||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.fromStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.toStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.arrivalStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.userName||'').toLowerCase().includes(searchText.trim().toLowerCase())):trains).length} buddies available • Same route`}
+                  {loadingTrains ? 'Loading...' : `${(searchText.trim() ? trains.filter((t)=>String(t.trainName||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.fromStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.toStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.arrivalStation||'').toLowerCase().includes(searchText.trim().toLowerCase())||String(t.userName||'').toLowerCase().includes(searchText.trim().toLowerCase())):trains).filter((t)=> (t.passengersCount||0) >= (minTravelers||0)).length} buddies available • Same route`}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.filterButton}>
+              <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilter(true)}>
                 <Text style={styles.filterText}>Filter</Text>
               </TouchableOpacity>
             </View>
@@ -530,6 +559,190 @@ export default function ModernHomeScreen() {
 
         <View style={styles.bottomSpace} />
       </Animated.ScrollView>
+      <Modal visible={showFilter} transparent animationType="fade" onRequestClose={() => setShowFilter(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filter</Text>
+            {activeTab === 'rides' ? (
+              <>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Min seats</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    keyboardType="number-pad"
+                    value={String(minSeats || 0)}
+                    onChangeText={(t) => setMinSeats(Number(t) || 0)}
+                  />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Max price</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    keyboardType="number-pad"
+                    value={typeof maxPrice === 'number' ? String(maxPrice) : ''}
+                    onChangeText={(t) => setMaxPrice(t.trim() ? Number(t) || 0 : undefined)}
+                    placeholder="Any"
+                  />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Min rating</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    keyboardType="decimal-pad"
+                    value={String(minRating || 0)}
+                    onChangeText={(t) => setMinRating(Number(t) || 0)}
+                  />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>From location</Text>
+                  <TouchableOpacity
+                    style={styles.pickerBox}
+                    onPress={() => {
+                      setShowFromList((v) => !v);
+                      setShowToList(false);
+                      setShowTrainStationList(false);
+                    }}
+                  >
+                    <Text style={styles.pickerText}>{selectedFromLocation || 'Choose'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showFromList && (
+                  <View style={styles.pickerList}>
+                    {Array.from(new Set(rides.map((r) => String(r.from || '').trim()).filter(Boolean)))
+                      .sort()
+                      .map((loc) => (
+                        <TouchableOpacity
+                          key={`from-${loc}`}
+                          style={[
+                            styles.pickerItem,
+                            selectedFromLocation.toLowerCase() === loc.toLowerCase() && styles.pickerItemSelected,
+                          ]}
+                          onPress={() => {
+                            setSelectedFromLocation(loc);
+                            setShowFromList(false);
+                          }}
+                        >
+                          <Text style={styles.pickerItemText}>{loc}</Text>
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                )}
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>To location</Text>
+                  <TouchableOpacity
+                    style={styles.pickerBox}
+                    onPress={() => {
+                      setShowToList((v) => !v);
+                      setShowFromList(false);
+                      setShowTrainStationList(false);
+                    }}
+                  >
+                    <Text style={styles.pickerText}>{selectedToLocation || 'Choose'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showToList && (
+                  <View style={styles.pickerList}>
+                    {Array.from(new Set(rides.map((r) => String(r.to || '').trim()).filter(Boolean)))
+                      .sort()
+                      .map((loc) => (
+                        <TouchableOpacity
+                          key={`to-${loc}`}
+                          style={[
+                            styles.pickerItem,
+                            selectedToLocation.toLowerCase() === loc.toLowerCase() && styles.pickerItemSelected,
+                          ]}
+                          onPress={() => {
+                            setSelectedToLocation(loc);
+                            setShowToList(false);
+                          }}
+                        >
+                          <Text style={styles.pickerItemText}>{loc}</Text>
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Min travelers</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    keyboardType="number-pad"
+                    value={String(minTravelers || 0)}
+                    onChangeText={(t) => setMinTravelers(Number(t) || 0)}
+                  />
+                </View>
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Station</Text>
+                  <TouchableOpacity
+                    style={styles.pickerBox}
+                    onPress={() => {
+                      setShowTrainStationList((v) => !v);
+                      setShowFromList(false);
+                      setShowToList(false);
+                    }}
+                  >
+                    <Text style={styles.pickerText}>{selectedTrainStation || 'Choose'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showTrainStationList && (
+                  <View style={styles.pickerList}>
+                    {(() => {
+                      const stationList: string[] = Array.from(
+                        new Set(
+                          (trains || []).reduce<string[]>((acc, t: any) => {
+                            const values = [t?.fromStation, t?.toStation, t?.arrivalStation];
+                            for (const s of values) {
+                              const v = String(s || '').trim();
+                              if (v) acc.push(v);
+                            }
+                            return acc;
+                          }, [])
+                        )
+                      ).sort();
+                      return stationList.map((loc: string) => (
+                        <TouchableOpacity
+                          key={`station-${loc}`}
+                          style={[
+                            styles.pickerItem,
+                            selectedTrainStation.toLowerCase() === loc.toLowerCase() && styles.pickerItemSelected,
+                          ]}
+                          onPress={() => {
+                            setSelectedTrainStation(loc);
+                            setShowTrainStationList(false);
+                          }}
+                        >
+                          <Text style={styles.pickerItemText}>{loc}</Text>
+                        </TouchableOpacity>
+                      ));
+                    })()}
+                  </View>
+                )}
+              </>
+            )}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.secondaryButton]}
+                onPress={() => {
+                  setMinSeats(0);
+                  setMaxPrice(undefined);
+                  setMinRating(0);
+                  setMinTravelers(0);
+                  setSelectedFromLocation('');
+                  setSelectedToLocation('');
+                  setSelectedTrainStation('');
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryButton, styles.buttonElevated]} onPress={() => setShowFilter(false)}>
+                <Text style={styles.primaryButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -644,10 +857,95 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   searchInput: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#0F172A',
     fontWeight: '500',
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  inputLabel: {
+    width: 120,
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  inputField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 15,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 8,
+  },
+  pickerBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  pickerText: {
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  pickerList: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  pickerItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerItemSelected: {
+    backgroundColor: '#E0F2FE',
+  },
+  pickerItemText: {
+    fontSize: 15,
+    color: '#334155',
+    fontWeight: '600',
   },
   
   // Tabs
