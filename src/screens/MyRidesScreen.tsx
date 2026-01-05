@@ -446,26 +446,36 @@ export default function MyRidesScreen() {
                   <View style={{ marginTop: 12 }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>Requests</Text>
                     {requests.filter((r) => r.rideId === ride.id && r.status === 'PENDING').map((r) => (
-                      <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View key={r.id} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                           <View style={[styles.avatar, styles.avatarGradientSecondary, { width: 36, height: 36, borderRadius: 18, marginRight: 10 }]}>
                             <Text style={styles.avatarText}>{(r.passengerName || 'U')[0].toUpperCase()}</Text>
                           </View>
                           <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>{r.passengerName}</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <TouchableOpacity style={[styles.secondaryButton, { marginRight: 8 }]} onPress={() => handleChatWithPassenger(r)}>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity 
+                            style={[styles.secondaryButton, { flex: 1, paddingVertical: 10, paddingHorizontal: 4 }]} 
+                            onPress={() => handleChatWithPassenger(r)}
+                          >
                             <Text style={styles.secondaryButtonText}>Chat</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={[styles.primaryButton, styles.buttonElevated]} onPress={() => handleAcceptRequest(r)}>
+                          <TouchableOpacity 
+                            style={[styles.primaryButton, styles.buttonElevated, { flex: 1, paddingVertical: 10, paddingHorizontal: 4 }]} 
+                            onPress={() => handleAcceptRequest(r)}
+                          >
                             <Text style={styles.primaryButtonText}>Accept</Text>
                           </TouchableOpacity>
-                          <TouchableOpacity style={[styles.cancelButton]} onPress={() => handleDenyRequest(r)}>
+                          <TouchableOpacity 
+                            style={[styles.cancelButton, { flex: 1, paddingVertical: 10, paddingHorizontal: 4 }]} 
+                            onPress={() => handleDenyRequest(r)}
+                          >
                             <Text style={styles.cancelButtonText}>Deny</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
-                    ))}
+                    ))
+}
                   </View>
                 )}
 
