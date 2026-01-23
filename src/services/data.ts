@@ -91,8 +91,8 @@ export async function acceptRideAndCreateBooking(request: { id: string; rideId: 
   }
 }
 
-export function denyRideRequest(req: { id: string }) {
-  return updateCollection('rideRequests', req.id, { status: 'DENIED' });
+export async function denyRideRequest(req: { id: string }) {
+  await updateCollection('rideRequests', req.id, { status: 'DENIED' });
 }
 
 export async function submitRating(bookingId: string, raterId: string, rateeId: string, score: number) {
@@ -115,5 +115,10 @@ export async function cancelBooking(bookingId: number) {
 
 export async function deleteRide(rideId: string) {
   const { error } = await supabase.from('rides').delete().eq('id', rideId);
+  if (error) throw error;
+}
+
+export async function cancelTrainPost(trainId: string) {
+  const { error } = await supabase.from('train_posts').update({ status: 'CANCELLED' }).eq('id', trainId);
   if (error) throw error;
 }

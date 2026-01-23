@@ -175,7 +175,7 @@ export default function ChatRoomScreen() {
             disabled={!text.trim()}
           >
             <Text style={styles.sendButtonText}>
-              {text.trim() ? 'Send' : '✏️'}
+              {text.trim() ? 'Send' : 'Send'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -432,7 +432,8 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   buttonElevated: {
-    shadowColor: '#2563EB',
+    shadowColor: '#517fe0ff',
+    color: '#080808ff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -443,7 +444,7 @@ const styles = StyleSheet.create({
     shadowColor: '#CBD5E0',
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffffff',
     fontSize: 16,
     fontWeight: '700',
   },

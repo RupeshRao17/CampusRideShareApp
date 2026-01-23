@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   searchBoxFocused: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffffff',
     borderColor: '#60A5FA',
     borderWidth: 2,
   },
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: {
     fontSize: 17,
-    color: '#64748B',
+    color: '#303030ff',
     fontWeight: '500',
     flex: 1,
   },

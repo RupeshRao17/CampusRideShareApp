@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert } from 'react-native';
-import { getRideRequestsForDriver, acceptRideAndCreateBooking, denyRideRequest, getMyBookings, submitRating, cancelBooking, deleteRide } from '@services/data';
+import { getRideRequestsForDriver, acceptRideAndCreateBooking, denyRideRequest, getMyBookings, submitRating, cancelBooking, deleteRide, getMyTrainPosts, cancelTrainPost } from '@services/data';
 import { useNavigation } from '@react-navigation/native';
 import { getMyRides } from '@services/data';
 import { useAuthState, supabase, listenCollection } from '@lib/firebase';
@@ -15,6 +15,7 @@ export default function MyRidesScreen() {
   const [rides, setRides] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
+  const [trainPosts, setTrainPosts] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('upcoming');
   const [rideMap, setRideMap] = useState<Record<string, any>>({});
   const [driverProfiles, setDriverProfiles] = useState<Record<string, any>>({});
@@ -30,6 +31,12 @@ export default function MyRidesScreen() {
   useEffect(() => {
     if (!user) return;
     const unsub = getRideRequestsForDriver(user.uid, setRequests);
+    return () => unsub();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = getMyTrainPosts(user.uid, setTrainPosts);
     return () => unsub();
   }, [user?.uid]);
 
@@ -227,6 +234,21 @@ export default function MyRidesScreen() {
   // legacy no-op retained
   const handleRateRideLegacy = (_ride: any) => {};
 
+  const handleManageTrainPost = (train: any) => {
+    const deleteAction = async () => {
+      try {
+        await cancelTrainPost(train.id);
+        Alert.alert('Deleted', 'Train connection has been deleted');
+      } catch (e) {
+        Alert.alert('Error', 'Could not delete train connection');
+      }
+    };
+    Alert.alert('Manage Train Connection', 'Choose an action', [
+      { text: 'Delete Connection', style: 'destructive', onPress: deleteAction },
+      { text: 'Close', style: 'cancel' },
+    ]);
+  };
+
   const handleManageRide = (ride: any) => {
     if (!user) return;
     const confirmedForRide = (bookings || []).filter((b: any) => b.rideId === ride.id && b.driverId === user.uid && String(b.status).toUpperCase() === 'CONFIRMED');
@@ -285,6 +307,9 @@ export default function MyRidesScreen() {
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+
+  const activeTrainPosts = trainPosts.filter(t => t.status === 'ACTIVE');
+  const pastTrainPosts = trainPosts.filter(t => t.status !== 'ACTIVE');
 
   return (
     <View style={styles.container}>
@@ -514,6 +539,88 @@ export default function MyRidesScreen() {
                 </TouchableOpacity>
               </TouchableOpacity>
             ))}
+
+            {/* My Posted Train Connections */}
+            {activeTrainPosts.length > 0 && (
+              <>
+                <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+                  <View>
+                    <Text style={styles.sectionTitle}>My Train Connections</Text>
+                    <Text style={styles.sectionSubtitle}>{activeTrainPosts.length} posted connections</Text>
+                  </View>
+                </View>
+
+                {activeTrainPosts.map((train, index) => (
+                  <TouchableOpacity 
+                    key={train.id} 
+                    style={[styles.modernCard, styles.cardElevated]}
+                    activeOpacity={0.9}
+                  >
+                    {/* Train Badge */}
+                    <View style={[styles.statusBadge, { backgroundColor: '#E0E7FF' }]}>
+                      <Text style={styles.statusIcon}>🚆</Text>
+                      <Text style={[styles.statusText, { color: '#3730A3' }]}>
+                        Train Connection
+                      </Text>
+                    </View>
+
+                    <View style={styles.routeSection}>
+                      <View style={styles.timeline}>
+                        <View style={styles.timelineItem}>
+                          <View style={styles.timelineDot} />
+                        </View>
+                        <View style={styles.timelineLine} />
+                        <View style={styles.timelineItem}>
+                          <View style={styles.locationIconContainer}>
+                            <Text style={styles.locationIcon}>📍</Text>
+                          </View>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.routeInfo}>
+                        <View style={styles.locationRow}>
+                          <View style={styles.locationContent}>
+                            <Text style={styles.locationText}>{train.fromStation}</Text>
+                          </View>
+                        </View>
+                        
+                        <View style={styles.locationRow}>
+                          <View style={styles.locationContent}>
+                            <Text style={styles.locationText}>{train.toStation}</Text>
+                          </View>
+                          <Text style={styles.timeText}>{train.arrivalTime}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.detailsRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailIcon}>👥</Text>
+                        <View>
+                          <Text style={styles.detailLabel}>Travelers</Text>
+                          <Text style={styles.detailValue}>{train.passengersCount}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailIcon}>🏁</Text>
+                        <View>
+                          <Text style={styles.detailLabel}>Arrival</Text>
+                          <Text style={styles.detailValue}>{train.arrivalStation}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={[styles.primaryButton, styles.buttonElevated, { backgroundColor: '#EF4444' }]}
+                      onPress={() => handleManageTrainPost(train)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.primaryButtonText}>Delete Connection</Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -673,6 +780,80 @@ export default function MyRidesScreen() {
                   </View>
                 </TouchableOpacity>
               ))
+            )}
+            
+            {/* Past Train Connections */}
+            {activeTab === 'past' && pastTrainPosts.length > 0 && (
+              <>
+                <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Past Train Connections</Text>
+                    <Text style={styles.sectionSubtitle}>{pastTrainPosts.length} past connections</Text>
+                  </View>
+                </View>
+
+                {pastTrainPosts.map((train, index) => (
+                  <TouchableOpacity 
+                    key={train.id} 
+                    style={[styles.modernCard, styles.cardElevated, { opacity: 0.8 }]}
+                    activeOpacity={0.9}
+                  >
+                    {/* Train Badge */}
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(train.status.toLowerCase()) + '20' }]}>
+                      <Text style={styles.statusIcon}>{getStatusIcon(train.status.toLowerCase())}</Text>
+                      <Text style={[styles.statusText, { color: getStatusColor(train.status.toLowerCase()) }]}>
+                        {getStatusText(train.status.toLowerCase())}
+                      </Text>
+                    </View>
+
+                    <View style={styles.routeSection}>
+                      <View style={styles.timeline}>
+                        <View style={styles.timelineItem}>
+                          <View style={styles.timelineDot} />
+                        </View>
+                        <View style={styles.timelineLine} />
+                        <View style={styles.timelineItem}>
+                          <View style={styles.locationIconContainer}>
+                            <Text style={styles.locationIcon}>📍</Text>
+                          </View>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.routeInfo}>
+                        <View style={styles.locationRow}>
+                          <View style={styles.locationContent}>
+                            <Text style={styles.locationText}>{train.fromStation}</Text>
+                          </View>
+                        </View>
+                        
+                        <View style={styles.locationRow}>
+                          <View style={styles.locationContent}>
+                            <Text style={styles.locationText}>{train.toStation}</Text>
+                          </View>
+                          <Text style={styles.timeText}>{train.arrivalTime}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.detailsRow}>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailIcon}>👥</Text>
+                        <View>
+                          <Text style={styles.detailLabel}>Travelers</Text>
+                          <Text style={styles.detailValue}>{train.passengersCount}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailIcon}>🏁</Text>
+                        <View>
+                          <Text style={styles.detailLabel}>Arrival</Text>
+                          <Text style={styles.detailValue}>{train.arrivalStation}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
             )}
           </>
         )}

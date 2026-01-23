@@ -252,6 +252,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   searchIconText: {
+    color: '#303030ff',
     fontSize: 20,
     opacity: 0.7,
   },
